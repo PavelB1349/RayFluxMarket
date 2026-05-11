@@ -9,9 +9,9 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 // 1. Добавляем сервисы для генерации Swagger
 
-
-builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 // Подключаем базу данных PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
