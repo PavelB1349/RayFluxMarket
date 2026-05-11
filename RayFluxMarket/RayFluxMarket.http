@@ -1,0 +1,6 @@
+@RayFluxMarket_HostAddress = http://localhost:5177
+
+GET {{RayFluxMarket_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
