@@ -5,7 +5,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Эта строка магическим образом решает проблему циклов
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+
+        // По желанию: сделаем JSON красивым (с отступами)
+        options.JsonSerializerOptions.WriteIndented = true;
+    });
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 // 1. Добавляем сервисы для генерации Swagger
 
