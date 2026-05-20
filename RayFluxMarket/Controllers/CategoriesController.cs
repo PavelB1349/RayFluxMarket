@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.DotNet.Scaffolding.Shared.Messaging;
 using Microsoft.EntityFrameworkCore;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.Entities;
@@ -11,7 +12,7 @@ using RayFluxMarket.Models.Entities;
 namespace RayFluxMarket.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]
+    [ApiController]                             
     public class CategoriesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -25,7 +26,7 @@ namespace RayFluxMarket.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
         {
-            return await _context.Categories.ToListAsync();
+            return await _context.Categories.AsNoTracking().ToListAsync();
         }
 
         // GET: api/Categories/5
@@ -36,7 +37,7 @@ namespace RayFluxMarket.Controllers
 
             if (category == null)
             {
-                return NotFound();
+                return NotFound( new {message = $"Категория с ID {id} не найдена." });
             }
 
             return category;
@@ -49,7 +50,7 @@ namespace RayFluxMarket.Controllers
         {
             if (id != category.Id)
             {
-                return BadRequest();
+                return BadRequest(new { message = "ID в URL и в теле запроса не совпадают." });
             }
 
             _context.Entry(category).State = EntityState.Modified;
@@ -62,12 +63,9 @@ namespace RayFluxMarket.Controllers
             {
                 if (!CategoryExists(id))
                 {
-                    return NotFound();
+                    return NotFound(new { message = $"Категория с ID {id} не найдена." });
                 }
-                else
-                {
-                    throw;
-                }
+                throw;
             }
 
             return NoContent();
@@ -78,6 +76,13 @@ namespace RayFluxMarket.Controllers
         [HttpPost]
         public async Task<ActionResult<Category>> PostCategory(Category category)
         {
+            // Базовая валидация: проверяем, нет ли уже категории с таким именем
+            var exists = await _context.Categories.AnyAsync(c => c.Name.ToLower() == category.Name.ToLower());
+            if (exists)
+            {
+                return BadRequest(new { message = "Категория с таким названием уже существует." });
+            }
+
             _context.Categories.Add(category);
             await _context.SaveChangesAsync();
 
@@ -91,7 +96,14 @@ namespace RayFluxMarket.Controllers
             var category = await _context.Categories.FindAsync(id);
             if (category == null)
             {
-                return NotFound();
+                return NotFound(new { message = $"Категория с ID {id} не найдена." });
+            }
+
+            // Проверяем, есть ли товары в этой категории, чтобы не сломать базу
+            var hasProducts = await _context.Products.AnyAsync(p => p.CategoryId == id);
+            if (hasProducts)
+            {
+                return BadRequest(new { message = "Нельзя удалить категорию, к которой привязаны товары." });
             }
 
             _context.Categories.Remove(category);
