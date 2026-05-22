@@ -25,7 +25,7 @@ namespace RayFluxMarket.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Material>>> GetMaterials()
         {
-            return await _context.Materials.ToListAsync();
+            return await _context.Materials.AsNoTracking().ToListAsync();
         }
 
         // GET: api/Materials/5
@@ -36,7 +36,7 @@ namespace RayFluxMarket.Controllers
 
             if (material == null)
             {
-                return NotFound();
+                return NotFound(new { message = $"Материал с ID {id} не найден." });
             }
 
             return material;
@@ -49,7 +49,7 @@ namespace RayFluxMarket.Controllers
         {
             if (id != material.Id)
             {
-                return BadRequest();
+                return BadRequest(new { message = "ID в URL и в теле запроса не совпадают." });
             }
 
             _context.Entry(material).State = EntityState.Modified;
@@ -60,14 +60,11 @@ namespace RayFluxMarket.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!MaterialExists(id))
+                if (!_context.Materials.Any(e => e.Id == id))
                 {
-                    return NotFound();
+                    return NotFound(new { message = $"Материал с ID {id} не найден." });
                 }
-                else
-                {
-                    throw;
-                }
+                throw;
             }
 
             return NoContent();
@@ -78,6 +75,12 @@ namespace RayFluxMarket.Controllers
         [HttpPost]
         public async Task<ActionResult<Material>> PostMaterial(Material material)
         {
+            var exists = await _context.Materials.AnyAsync(m => m.Name.ToLower() == material.Name.ToLower());
+            if (exists)
+            {
+                return BadRequest(new { message = "Материал с таким названием уже существует." });
+            }
+
             _context.Materials.Add(material);
             await _context.SaveChangesAsync();
 
@@ -88,10 +91,18 @@ namespace RayFluxMarket.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMaterial(int id)
         {
-            var material = await _context.Materials.FindAsync(id);
+            // Ищем материал вместе с товарами, которые его используют
+            var material = await _context.Materials
+                .Include(m => m.Products)
+                .FirstOrDefaultAsync(m => m.Id == id);
             if (material == null)
             {
-                return NotFound();
+                return NotFound(new { message = $"Материал с ID {id} не найден." });
+            }
+            // Защита: если этот материал привязан хотя бы к одному товару — отбиваем запрос
+            if (material.Products.Any())
+            {
+                return BadRequest(new { message = "Невозможно удалить материал, так как он используется в товарах." });
             }
 
             _context.Materials.Remove(material);

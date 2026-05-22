@@ -25,7 +25,7 @@ namespace RayFluxMarket.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Brand>>> GetBrands()
         {
-            return await _context.Brands.ToListAsync();
+            return await _context.Brands.AsNoTracking().ToListAsync();
         }
 
         // GET: api/Brands/5
@@ -36,7 +36,7 @@ namespace RayFluxMarket.Controllers
 
             if (brand == null)
             {
-                return NotFound();
+                return NotFound(new {message = $"Бренд с ID {id} не найден." });
             }
 
             return brand;
@@ -47,11 +47,10 @@ namespace RayFluxMarket.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutBrand(int id, Brand brand)
         {
-            if (id != brand.Id)
+            if(id != brand.Id)
             {
-                return BadRequest();
+                return BadRequest(new {message = $"ID в URL и в теле запроса не совпадают" });
             }
-
             _context.Entry(brand).State = EntityState.Modified;
 
             try
@@ -60,16 +59,15 @@ namespace RayFluxMarket.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!BrandExists(id))
+                if (!_context.Brands.Any(e => e.Id == id))
                 {
-                    return NotFound();
+                    return NotFound(new { message = $"Бренд с ID {id} не найден." });
                 }
                 else
                 {
                     throw;
                 }
             }
-
             return NoContent();
         }
 
@@ -78,6 +76,12 @@ namespace RayFluxMarket.Controllers
         [HttpPost]
         public async Task<ActionResult<Brand>> PostBrand(Brand brand)
         {
+            var exists = await _context.Brands.AnyAsync(b => b.Name.ToLower() == brand.Name.ToLower());
+            if (exists)
+            {
+                return Conflict(new { message = $"Бренд с именем '{brand.Name}' уже существует." });
+            }
+
             _context.Brands.Add(brand);
             await _context.SaveChangesAsync();
 
@@ -91,7 +95,13 @@ namespace RayFluxMarket.Controllers
             var brand = await _context.Brands.FindAsync(id);
             if (brand == null)
             {
-                return NotFound();
+                return NotFound(new { message = $"Бренд с Id {id} не найден."});
+            }
+            // Защита: не удаляем бренд, если к нему привязаны товары
+            var hasProducts = await _context.Products.AnyAsync(p => p.BrandId == id);
+            if (hasProducts)
+            {
+                return BadRequest(new { message = $"Невозможно удалить бренд с ID {id}, так как к нему привязаны товары." });
             }
 
             _context.Brands.Remove(brand);
