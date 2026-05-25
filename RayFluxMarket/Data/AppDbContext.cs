@@ -15,6 +15,8 @@ namespace RayFluxMarket.Data
         public DbSet<ProductImage> ProductImages { get; set; }
         public DbSet<Material> Materials { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderItem> OrderItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
