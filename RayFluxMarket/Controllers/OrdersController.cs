@@ -1,18 +1,21 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
+using System.Security.Claims;
 
 namespace RayFluxMarket.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class OrdersController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private const int MockUserId = 1; // Временная заглушка пользователя
+        //private const int MockUserId = 1; // Временная заглушка пользователя
 
         public OrdersController(AppDbContext context)
         {
@@ -23,10 +26,11 @@ namespace RayFluxMarket.Controllers
         [HttpPost("Checkout")]
         public async Task<IActionResult> Checkout()
         {
+            int userId = GetCurrentUserId();
             // 1. Достаем элементы корзины пользователя вместе с данными о товарах
             var cartItems = await _context.CartItems
                 .Include(ci => ci.Product)
-                .Where(ci => ci.UserId == MockUserId)
+                .Where(ci => ci.UserId == userId)
                 .ToListAsync();
 
             if (!cartItems.Any())
@@ -37,7 +41,7 @@ namespace RayFluxMarket.Controllers
             // 2. Создаем сам заказ (Шапку)
             var order = new Order
             {
-                UserId = MockUserId,
+                UserId = userId,
                 OrderDate = DateTime.UtcNow,
                 Status = "New",
                 TotalAmount = 0 // Посчитаем ниже
@@ -71,14 +75,17 @@ namespace RayFluxMarket.Controllers
             return CreatedAtAction(nameof(GetOrderById), new { id = order.Id }, new { message = "Заказ успешно оформлен!", orderId = order.Id });
         }
 
+       
+
         // 2. GET: api/Orders/MyOrders (История заказов текущего пользователя)
         [HttpGet("MyOrders")]
         public async Task<ActionResult<IEnumerable<OrderDto>>> GetMyOrders()
         {
+            int userId = GetCurrentUserId();
             var orders = await _context.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
-                .Where(o => o.UserId == MockUserId)
+                .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
 
@@ -105,10 +112,11 @@ namespace RayFluxMarket.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<OrderDto>> GetOrderById(int id)
         {
+            int userId = GetCurrentUserId();
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
-                .FirstOrDefaultAsync(o => o.Id == id && o.UserId == MockUserId);
+                .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
 
             if (order == null)
             {
@@ -132,6 +140,15 @@ namespace RayFluxMarket.Controllers
             };
 
             return Ok(orderDto);
+        }
+        private int GetCurrentUserId()
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr))
+            {
+                throw new UnauthorizedAccessException("ID пользователя не найден в токене.");
+            }
+            return int.Parse(userIdStr);
         }
     }
 }
