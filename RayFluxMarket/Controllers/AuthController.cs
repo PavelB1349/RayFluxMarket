@@ -5,6 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
 
 namespace RayFluxMarket.Controllers
 {
@@ -13,10 +17,12 @@ namespace RayFluxMarket.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(AppDbContext context)
+        public AuthController(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
         // 1. POST: api/Auth/Register (Регистрация нового пользователя)
@@ -65,13 +71,49 @@ namespace RayFluxMarket.Controllers
                 return BadRequest(new { message = "Неверный пароль." });
             }
 
-            // Если всё верно — временно возвращаем сообщение и данные пользователя
+            //// Если всё верно — временно возвращаем сообщение и данные пользователя
+            //return Ok(new
+            //{
+            //    message = "Вы успешно вошли!",
+            //    userId = user.Id,
+            //    email = user.Email,
+            //    role = user.Role
+            //});
+
+
+
+
+            // --- ГЕНЕРАЦИЯ JWT-ТОКЕНА ---
+
+            // 1. Создаем "Claims" (Утверждения) — данные, которые зашьем внутрь токена
+            var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), // Зашиваем ID
+            new Claim(ClaimTypes.Email, user.Email),                  // Зашиваем Email
+            new Claim(ClaimTypes.Role, user.Role)                     // Зашиваем Роль (User/Admin)
+        };
+
+            // 2. Берем наш секретный ключ из appsettings.json
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            // 3. Собираем токен воедино
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddDays(7), // Токен будет жить 7 дней
+                signingCredentials: creds
+            );
+
+            // 4. Превращаем токен в красивую длинную строку
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+            // Возвращаем токен клиенту!
             return Ok(new
             {
                 message = "Вы успешно вошли!",
-                userId = user.Id,
-                email = user.Email,
-                role = user.Role
+                token = tokenString
             });
         }
     }

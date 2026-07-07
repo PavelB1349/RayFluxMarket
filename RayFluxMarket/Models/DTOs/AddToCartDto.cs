@@ -8,7 +8,7 @@ namespace RayFluxMarket.Models.DTOs
         [Required]
         public int ProductId { get; set; }
 
-        [Range(1, 100, ErrorMessage = "Количество должно быть от 1 до 100.")]
-        public int Quantity { get; set; } = 1;
+        [Range(0, 100, ErrorMessage = "Количество должно быть от 0 до 100.")]
+        public int Quantity { get; set; }
     }
 }
