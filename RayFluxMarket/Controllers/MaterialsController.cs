@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,7 @@ namespace RayFluxMarket.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin")] // Только администратор может управлять материалами
     public class MaterialsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -23,6 +25,7 @@ namespace RayFluxMarket.Controllers
 
         // GET: api/Materials
         [HttpGet]
+        [AllowAnonymous] // Разрешаем всем пользователям просматривать материалы
         public async Task<ActionResult<IEnumerable<Material>>> GetMaterials()
         {
             return await _context.Materials.AsNoTracking().ToListAsync();
@@ -30,6 +33,7 @@ namespace RayFluxMarket.Controllers
 
         // GET: api/Materials/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<Material>> GetMaterial(int id)
         {
             var material = await _context.Materials.FindAsync(id);

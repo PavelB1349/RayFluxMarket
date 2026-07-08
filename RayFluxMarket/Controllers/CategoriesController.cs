@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Scaffolding.Shared.Messaging;
@@ -12,7 +13,8 @@ using RayFluxMarket.Models.Entities;
 namespace RayFluxMarket.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]                             
+    [ApiController]
+    [Authorize(Roles = "Admin")] // Только администратор может управлять категориями
     public class CategoriesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -24,6 +26,7 @@ namespace RayFluxMarket.Controllers
 
         // GET: api/Categories
         [HttpGet]
+        [AllowAnonymous] // Разрешаем всем пользователям просматривать категории
         public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
         {
             return await _context.Categories.AsNoTracking().ToListAsync();
@@ -31,6 +34,7 @@ namespace RayFluxMarket.Controllers
 
         // GET: api/Categories/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<Category>> GetCategory(int id)
         {
             var category = await _context.Categories.FindAsync(id);

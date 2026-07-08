@@ -5,8 +5,11 @@ using RayFluxMarket.Data;
 using System.ComponentModel.DataAnnotations;
 using RayFluxMarket.Models.DTOs;
 
+using Microsoft.AspNetCore.Authorization;
+
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Admin")] // <-- По умолчанию ВСЕ методы контроллера теперь только для Админа!
 public class ProductsController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -35,6 +38,7 @@ public class ProductsController : ControllerBase
     //    .ToListAsync();
     //}
     [HttpGet]
+    [AllowAnonymous] // <-- Этот метод теперь доступен всем, даже неавторизованным пользователям
     public async Task<ActionResult<IEnumerable<Product>>> GetProducts(
     [FromQuery] string? search = null,
     [FromQuery] int? categoryId = null,
@@ -92,6 +96,7 @@ public class ProductsController : ControllerBase
     //    return product;
     //}
     [HttpGet("{id}")]
+    [AllowAnonymous] // <-- Этот метод теперь доступен всем, даже неавторизованным пользователям
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
         var product = await _context.Products
