@@ -141,6 +141,33 @@ namespace RayFluxMarket.Controllers
 
             return Ok(orderDto);
         }
+
+        // 4. PUT: api/Orders/{id}/status (Смена статуса заказа — ТОЛЬКО ДЛЯ АДМИНА)
+        [HttpPut("{id}/status")]
+        [Authorize(Roles = "Admin")] // Эндпоинт доступен исключительно администраторам!
+        public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusDto dto)
+        {
+            // Ищем заказ в базе (тут мы НЕ фильтруем по userId, так как админ имеет право видеть и менять любые заказы!)
+            var order = await _context.Orders.FindAsync(id);
+
+            if (order == null)
+            {
+                return NotFound(new { message = $"Заказ с ID {id} не найден." });
+            }
+
+            // Валидация: можно добавить массив разрешенных статусов, чтобы админ не ввёл бред
+            var allowedStatuses = new List<string> { "New", "Processing", "Shipped", "Delivered", "Cancelled" };
+            if (!allowedStatuses.Contains(dto.Status))
+            {
+                return BadRequest(new { message = $"Недопустимый статус. Разрешены только: {string.Join(", ", allowedStatuses)}" });
+            }
+
+            // Меняем статус и сохраняем
+            order.Status = dto.Status;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Статус заказа №{id} успешно изменен на '{dto.Status}'.", orderId = id, newStatus = order.Status });
+        }
         private int GetCurrentUserId()
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
