@@ -4,6 +4,7 @@ using RayFluxMarket.Models.Entities;
 using RayFluxMarket.Data;
 using System.ComponentModel.DataAnnotations;
 using RayFluxMarket.Models.DTOs;
+using RayFluxMarket.Services;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -319,5 +320,45 @@ public class ProductsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    // POST: api/Products/{id}/image (Загрузка картинки к товару — ТОЛЬКО ДЛЯ АДМИНА)
+    [HttpPost("{id}/image")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UploadProductImage(int id, IFormFile file, [FromServices] IFileService fileService)
+    {
+        // 1. Ищем товар в базе
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+        {
+            return NotFound(new { message = $"Товар с ID {id} не найден." });
+        }
+
+        try
+        {
+            // 2. Отдаем файл сервису на сохранение и получаем путь к нему
+            var relativePath = await fileService.UploadProductImageAsync(file);
+
+            // 3. Проверяем, есть ли уже картинки у этого товара
+            bool hasImages = await _context.ProductImages.AnyAsync(i => i.ProductId == id);
+
+            // 4. Создаем запись в базе данных
+            var productImage = new ProductImage
+            {
+                ProductId = id,
+                Url = relativePath,
+                IsPrimary = !hasImages // Если картинок еще не было, эта автоматически становится главной
+            };
+
+            _context.ProductImages.Add(productImage);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Картинка успешно загружена.", url = relativePath });
+        }
+        catch (ArgumentException ex)
+        {
+            // Если сервис выкинул ошибку (например, не тот формат), отдаем 400 BadRequest
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

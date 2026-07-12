@@ -5,6 +5,7 @@ using RayFluxMarket.Data;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using RayFluxMarket.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,6 +86,8 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddScoped<IFileService, FileService>();
+
 var app = builder.Build();
 app.UseSerilogRequestLogging();
 
@@ -99,6 +102,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // Открывает папку wwwroot для веба
 app.UseAuthentication();
 app.UseAuthorization();
 
