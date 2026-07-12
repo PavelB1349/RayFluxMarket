@@ -5,6 +5,7 @@ using RayFluxMarket.Data;
 using System.ComponentModel.DataAnnotations;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Services;
+using Microsoft.Extensions.Caching.Memory;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -14,9 +15,11 @@ using Microsoft.AspNetCore.Authorization;
 public class ProductsController : ControllerBase
 {
     private readonly AppDbContext _context;
-    public ProductsController(AppDbContext context)
+    private readonly IMemoryCache _cache; // <-- Добавили поле для кэша
+    public ProductsController(AppDbContext context, IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     private bool ProductExists(int? id)
@@ -25,84 +28,67 @@ public class ProductsController : ControllerBase
     }
 
 
-    // GET: api/Product
-    //[HttpGet]
-    //public async Task<ActionResult<IEnumerable<Product>>> GetProduct()
-    //{
-    //    //return await _context.Products.ToListAsync();
-    //    return await _context.Products
-    //    .Include(p => p.Images)      // Подтягиваем все фото
-    //    .Include(p => p.Materials)   // Подтягиваем материалы
-    //    .Include(p => p.Brand)       // Подтягиваем бренд (название, лого и т.д.)
-    //    .Include(p => p.Category)    // Подтягиваем категорию
-    //    .AsNoTracking() // Для оптимизации чтения, если не планируем изменять эти объекты
-    //    .ToListAsync();
-    //}
+    // GET: api/Products
     [HttpGet]
-    [AllowAnonymous] // <-- Этот метод теперь доступен всем, даже неавторизованным пользователям
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Product>>> GetProducts([FromQuery] ProductQueryParameters query)
     {
-        
-        // 1. Создаем базовый запрос к таблице, подтягивая связанные данные
+        // 1. Формируем уникальный ключ кэша на основе всех фильтров клиента
+        string cacheKey = $"products_p{query.PageNumber}_s{query.PageSize}_q{query.Search}_c{query.CategoryId}_b{query.BrandId}_min{query.MinPrice}_max{query.MaxPrice}_sort{query.SortBy}";
+
+        // 2. Пытаемся достать готовые данные из оперативной памяти
+        if (_cache.TryGetValue(cacheKey, out IEnumerable<Product>? cachedProducts))
+        {
+            // Если нашли — отдаем мгновенно, минуя базу данных!
+            return Ok(cachedProducts);
+        }
+
+        // 3. ЕСЛИ В КЭШЕ ПУСТО — ДЕЛАЕМ ЗАПРОС К БАЗЕ ДАННЫХ
         var productsQuery = _context.Products
             .Include(p => p.Images)
             .Include(p => p.Brand)
             .Include(p => p.Category)
-            .AsNoTracking() // Оптимизация для чтения
-            .AsQueryable(); // Переводим в режим динамического построения запроса
+            .AsNoTracking()
+            .AsQueryable();
 
-        // 2. ФИЛЬТРАЦИЯ: Поиск по названию (без учета регистра)
+        // (ЗДЕСЬ ОСТАЕТСЯ ВЕСЬ ТВОЙ КОД ФИЛЬТРАЦИИ ИЗ ПРОШЛОЙ ЗАДАЧИ)
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var searchLower = query.Search.ToLower();
             productsQuery = productsQuery.Where(p => p.Name.ToLower().Contains(searchLower));
         }
 
-        // 3. ФИЛЬТРАЦИЯ: По Категории и Бренду
-        if (query.CategoryId.HasValue)
-        {
-            productsQuery = productsQuery.Where(p => p.CategoryId == query.CategoryId.Value);
-        }
+        if (query.CategoryId.HasValue) productsQuery = productsQuery.Where(p => p.CategoryId == query.CategoryId.Value);
+        if (query.BrandId.HasValue) productsQuery = productsQuery.Where(p => p.BrandId == query.BrandId.Value);
+        if (query.MinPrice.HasValue) productsQuery = productsQuery.Where(p => p.Price >= query.MinPrice.Value);
+        if (query.MaxPrice.HasValue) productsQuery = productsQuery.Where(p => p.Price <= query.MaxPrice.Value);
 
-        if (query.BrandId.HasValue)
-        {
-            productsQuery = productsQuery.Where(p => p.BrandId == query.BrandId.Value);
-        }
-
-        // 4. ФИЛЬТРАЦИЯ: По диапазону цен
-        if (query.MinPrice.HasValue)
-        {
-            productsQuery = productsQuery.Where(p => p.Price >= query.MinPrice.Value);
-        }
-
-        if (query.MaxPrice.HasValue)
-        {
-            productsQuery = productsQuery.Where(p => p.Price <= query.MaxPrice.Value);
-        }
-
-        // 5. СОРТИРОВКА
         productsQuery = query.SortBy?.ToLower() switch
         {
             "price_asc" => productsQuery.OrderBy(p => p.Price),
             "price_desc" => productsQuery.OrderByDescending(p => p.Price),
             "name_desc" => productsQuery.OrderByDescending(p => p.Name),
-            _ => productsQuery.OrderBy(p => p.Id) // Сортировка по умолчанию
+            _ => productsQuery.OrderBy(p => p.Id)
         };
 
-        // 6. ПАГИНАЦИЯ (Магия пропуска и взятия строк)
-        // Защита от дурака: номер страницы не может быть меньше 1, размер не меньше 1 и не больше 50
         int pageNumber = query.PageNumber < 1 ? 1 : query.PageNumber;
         int pageSize = query.PageSize < 1 ? 1 : (query.PageSize > 50 ? 50 : query.PageSize);
 
         var products = await productsQuery
-            .Skip((pageNumber - 1) * pageSize) // Пропускаем товары предыдущих страниц
-            .Take(pageSize)                   // Берем ровно столько, сколько нужно для текущей страницы
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
+
+        // 4. СОХРАНЯЕМ РЕЗУЛЬТАТ В КЭШ ПЕРЕД ОТПРАВКОЙ КЛИЕНТУ
+        var cacheOptions = new MemoryCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromMinutes(2)); // Храним данные ровно 2 минуты
+
+        _cache.Set(cacheKey, products, cacheOptions);
 
         return Ok(products);
     }
 
- 
+
     [HttpGet("{id}")]
     [AllowAnonymous] // <-- Этот метод теперь доступен всем, даже неавторизованным пользователям
     public async Task<ActionResult<Product>> GetProduct(int id)
