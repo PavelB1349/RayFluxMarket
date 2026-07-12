@@ -41,7 +41,8 @@ public class ProductsController : ControllerBase
     [AllowAnonymous] // <-- Этот метод теперь доступен всем, даже неавторизованным пользователям
     public async Task<ActionResult<IEnumerable<Product>>> GetProducts([FromQuery] ProductQueryParameters query)
     {
-                // 1. Создаем базовый запрос к таблице, подтягивая связанные данные
+        
+        // 1. Создаем базовый запрос к таблице, подтягивая связанные данные
         var productsQuery = _context.Products
             .Include(p => p.Images)
             .Include(p => p.Brand)

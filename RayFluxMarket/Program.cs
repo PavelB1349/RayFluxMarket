@@ -4,8 +4,13 @@ using Microsoft.IdentityModel.Tokens;
 using RayFluxMarket.Data;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Подключаем Serilog, заставляя его читать настройки из appsettings.json
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
 
 // Add services to the container.
 
@@ -81,6 +86,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
+app.UseSerilogRequestLogging();
+
 app.UseExceptionHandler(); // Включает глобальный перехватчик ошибок
 
 // Configure the HTTP request pipeline.
