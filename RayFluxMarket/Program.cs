@@ -18,6 +18,10 @@ builder.Services.AddControllers()
         // По желанию: сделаем JSON красивым (с отступами)
         options.JsonSerializerOptions.WriteIndented = true;
     });
+
+builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -77,6 +81,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
+app.UseExceptionHandler(); // Включает глобальный перехватчик ошибок
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
