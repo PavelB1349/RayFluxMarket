@@ -24,6 +24,18 @@ builder.Services.AddControllers()
         // По желанию: сделаем JSON красивым (с отступами)
         options.JsonSerializerOptions.WriteIndented = true;
     });
+
+// Настраиваем политику CORS, разрешая доступ для будущих фронтенд-приложений
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        // 3000 - стандартный порт React, 5173 - стандартный порт Vite (Vue/React)
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+              .AllowAnyHeader()  // Разрешаем любые заголовки (включая Authorization с токеном)
+              .AllowAnyMethod(); // Разрешаем любые методы (GET, POST, PUT, DELETE)
+    });
+});
 builder.Services.AddMemoryCache(); // Включаем поддержку кэширования в оперативной памяти
 builder.Services.AddAuthorization(); // Включаем поддержку авторизации
 builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();// Подключаем глобальный обработчик ошибок
@@ -122,6 +134,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles(); // Открывает папку wwwroot для веба
+// Применяем политику CORS
+app.UseCors("AllowFrontend");// Включаем поддержку аутентификации и авторизации
 app.UseAuthentication();
 app.UseAuthorization();
 
