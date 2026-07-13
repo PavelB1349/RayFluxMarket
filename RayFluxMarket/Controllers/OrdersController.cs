@@ -47,10 +47,23 @@ namespace RayFluxMarket.Controllers
                 TotalAmount = 0 // Посчитаем ниже
             };
 
-            // 3. Переносим товары из корзины в позиции заказа
+            // 3. Переносим товары из корзины в позиции заказа и списываем со склада
             foreach (var cartItem in cartItems)
             {
                 if (cartItem.Product == null) continue;// На всякий случай, если товар удалили из каталога
+
+                // --- НОВАЯ ЛОГИКА: ПРОВЕРКА СКЛАДА ---
+                if (cartItem.Product.StockQuantity < cartItem.Quantity)
+                {
+                    return BadRequest(new
+                    {
+                        message = $"Нельзя оформить заказ: недостаточно товара '{cartItem.Product.Name}' на складе. В наличии: {cartItem.Product.StockQuantity}, запрошено: {cartItem.Quantity}."
+                    });
+                }
+
+                // Списываем купленное количество товара со склада
+                cartItem.Product.StockQuantity -= cartItem.Quantity;
+                // -------------------------------------
 
                 var orderItem = new OrderItem
                 {

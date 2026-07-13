@@ -16,6 +16,9 @@ namespace RayFluxMarket.Models.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
 
+        [Range(0, 10000, ErrorMessage = "Остаток не может быть отрицательным.")]
+        public int StockQuantity { get; set; } = 0;
+
         // Сезонность и коллекция (просто строки для начала)
         public string? Season { get; set; } // Зима, Лето, Демисезон
         public string? Collection { get; set; } // New Arrival, Sale
