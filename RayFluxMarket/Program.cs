@@ -25,7 +25,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.WriteIndented = true;
     });
 builder.Services.AddMemoryCache(); // Включаем поддержку кэширования в оперативной памяти
-
+builder.Services.AddAuthorization(); // Включаем поддержку авторизации
 builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();// Подключаем глобальный обработчик ошибок
 builder.Services.AddProblemDetails();// 
 
@@ -90,6 +90,24 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IFileService, FileService>();
 
 var app = builder.Build();
+
+// --- БЛОК АВТОМАТИЧЕСКОГО ЗАПОЛНЕНИЯ БАЗЫ (SEEDING) ---
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<AppDbContext>();
+        // Вызываем наш метод
+        DbSeeder.Seed(context);
+    }
+    catch (Exception ex)
+    {
+        // Если что-то пойдет не так (например, сервер БД выключен), запишем это в наш Serilog
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Произошла ошибка во время Seeding базы данных.");
+    }
+}
 app.UseSerilogRequestLogging();
 
 app.UseExceptionHandler(); // Включает глобальный перехватчик ошибок
