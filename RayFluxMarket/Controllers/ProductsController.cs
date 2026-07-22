@@ -105,36 +105,7 @@ public class ProductsController : ControllerBase
         return product;
     }
 
-    // PUT: api/Product/5
-    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-    //[HttpPut("{id}")]
-    //public async Task<IActionResult> PutProduct(int? id, Product product)
-    //{
-    //    if (id != product.Id)
-    //    {
-    //        return BadRequest();
-    //    }
-
-    //    _context.Entry(product).State = EntityState.Modified;
-
-    //    try
-    //    {
-    //        await _context.SaveChangesAsync();
-    //    }
-    //    catch (DbUpdateConcurrencyException)
-    //    {
-    //        if (!ProductExists(id))
-    //        {
-    //            return NotFound();
-    //        }
-    //        else
-    //        {
-    //            throw;
-    //        }
-    //    }
-
-    //    return NoContent();
-    //}
+    
     [HttpPut("{id}")]
     public async Task<IActionResult> PutProduct(int id, CreateProductDto dto)
     {
@@ -190,19 +161,11 @@ public class ProductsController : ControllerBase
         // 5. Сохраняем всё это добро
         await _context.SaveChangesAsync();
 
+        ClearProductsCache();
+
         return NoContent(); // Стандартный успешный ответ для PUT (204 No Content)
     }
 
-    // POST: api/Product
-    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-    //[HttpPost]
-    //public async Task<ActionResult<Product>> PostProduct(Product product)
-    //{
-    //    _context.Products.Add(product);
-    //    await _context.SaveChangesAsync();
-
-    //    return CreatedAtAction("GetProduct", new { id = product.Id }, product);
-    //}
     [HttpPost]
     public async Task<ActionResult<Product>> PostProduct(CreateProductDto dto)
     {
@@ -243,14 +206,7 @@ public class ProductsController : ControllerBase
         }
 
         _context.Products.Add(product);
-        //await _context.SaveChangesAsync();
-
-        //// Загружаем связанные данные для красивого ответа
-        //await _context.Entry(product).Collection(p => p.Images).LoadAsync();
-        //await _context.Entry(product).Collection(p => p.Materials).LoadAsync();
-        //await _context.Entry(product).Reference(p => p.Brand).LoadAsync();
-
-        //return CreatedAtAction("GetProduct", new { id = product.Id }, product);
+       
         await _context.SaveChangesAsync();
 
         // Перезапрашиваем продукт со всеми связями для чистого ответа
@@ -261,28 +217,15 @@ public class ProductsController : ControllerBase
             .Include(p => p.Category)
             .FirstOrDefaultAsync(p => p.Id == product.Id);
 
+        ClearProductsCache();
+
         return CreatedAtAction("GetProduct", new { id = product.Id }, completeProduct);
     }
 
-    // DELETE: api/Product/5
-    //[HttpDelete("{id}")]
-    //public async Task<IActionResult> DeleteProduct(int? id)
-    //{
-    //    var product = await _context.Products.FindAsync(id);
-    //    if (product == null)
-    //    {
-    //        return NotFound();
-    //    }
 
-    //    _context.Products.Remove(product);
-    //    await _context.SaveChangesAsync();
-
-    //    return NoContent();
-    //}
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteProduct(int id)
+    public async Task<IActionResult> DeleteProduct(int id, [FromServices] IFileService fileService)
     {
-        // Ищем продукт вместе с его картинками
         var product = await _context.Products
             .Include(p => p.Images)
             .FirstOrDefaultAsync(p => p.Id == id);
@@ -292,18 +235,20 @@ public class ProductsController : ControllerBase
             return NotFound(new { message = $"Товар с ID {id} не найден." });
         }
 
-        // Если каскадное удаление на уровне БД вдруг не сработает,
-        // мы явно удаляем связанные картинки из контекста перед удалением товара
         if (product.Images.Any())
         {
+            // Удаляем физические файлы с диска сервера!
+            foreach (var img in product.Images)
+            {
+                fileService.DeleteProductImage(img.Url);
+            }
             _context.ProductImages.RemoveRange(product.Images);
         }
 
-        // Удаляем сам товар
         _context.Products.Remove(product);
-
-        // Сохраняем изменения в базе
         await _context.SaveChangesAsync();
+
+        ClearProductsCache(); // <-- Очищаем кэш после удаления товара, чтобы клиенты не видели устаревшие данные
 
         return NoContent();
     }
@@ -345,6 +290,15 @@ public class ProductsController : ControllerBase
         {
             // Если сервис выкинул ошибку (например, не тот формат), отдаем 400 BadRequest
             return BadRequest(new { message = ex.Message });
+        }
+    }
+    private void ClearProductsCache()
+    {
+        // Приводим IMemoryCache к MemoryCache, чтобы получить доступ к методу Compact
+        if (_cache is MemoryCache memoryCache)
+        {
+            // 1.0 означает 100%. Мы вычищаем весь кэш из оперативной памяти.
+            memoryCache.Compact(1.0);
         }
     }
 }

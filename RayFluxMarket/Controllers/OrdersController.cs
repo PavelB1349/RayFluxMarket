@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
+using RayFluxMarket.Models.Enums;
 using System.Security.Claims;
 
 namespace RayFluxMarket.Controllers
@@ -43,7 +44,7 @@ namespace RayFluxMarket.Controllers
             {
                 UserId = userId,
                 OrderDate = DateTime.UtcNow,
-                Status = "New",
+                Status = OrderStatus.New,
                 TotalAmount = 0 // Посчитаем ниже
             };
 
@@ -169,7 +170,7 @@ namespace RayFluxMarket.Controllers
             }
 
             // Валидация: можно добавить массив разрешенных статусов, чтобы админ не ввёл бред
-            var allowedStatuses = new List<string> { "New", "Processing", "Shipped", "Delivered", "Cancelled" };
+            var allowedStatuses = new List<string> { OrderStatus.New, OrderStatus.Processing, OrderStatus.Shipped, OrderStatus.Delivered, OrderStatus.Cancelled };
             if (!allowedStatuses.Contains(dto.Status))
             {
                 return BadRequest(new { message = $"Недопустимый статус. Разрешены только: {string.Join(", ", allowedStatuses)}" });

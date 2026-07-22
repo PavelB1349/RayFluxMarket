@@ -10,6 +10,21 @@
             _environment = environment;
         }
 
+        public void DeleteProductImage(string relativePath)
+        {
+            if (string.IsNullOrEmpty(relativePath)) return;
+
+            // Вытаскиваем имя файла из пути (например, из "/images/products/1.jpg" достаем "1.jpg")
+            var fileName = Path.GetFileName(relativePath);
+            var filePath = Path.Combine(_environment.WebRootPath, "images", "products", fileName);
+
+            // Если файл физически существует на диске — удаляем его
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+
         public async Task<string> UploadProductImageAsync(IFormFile file)
         {
             // 1. Проверяем, что файл вообще прислали
