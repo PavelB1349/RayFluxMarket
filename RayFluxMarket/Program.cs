@@ -99,7 +99,8 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IFileService, FileService>();// Добавляем сервис для работы с файлами (загрузка изображений и т.д.)
+builder.Services.AddScoped<IEmailService, EmailService>();// Добавляем сервис для отправки email
 
 var app = builder.Build();
 

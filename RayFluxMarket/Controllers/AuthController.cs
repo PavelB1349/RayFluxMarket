@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
+using RayFluxMarket.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -19,11 +20,13 @@ namespace RayFluxMarket.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
         }
 
         // 1. POST: api/Auth/Register (Регистрация нового пользователя)
@@ -50,6 +53,28 @@ namespace RayFluxMarket.Controllers
 
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
+
+            // --- ОТПРАВКА ПРИВЕТСТВЕННОГО ПИСЬМА ---
+            try
+            {
+                string subject = "Добро пожаловать в RayFluxMarket!";
+                string htmlMessage = $@"
+                    <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
+                        <h2 style='color: #4f46e5;'>Приветствуем в RayFluxMarket! 🚀</h2>
+                        <p>Спасибо за регистрацию в нашем интернет-магазине.</p>
+                        <p>Ваш аккаунт (<b>{newUser.Email}</b>) успешно создан, и вы можете приступать к покупкам.</p>
+                        <br>
+                        <p>С уважением, <br><b>Команда RayFluxMarket</b></p>
+                    </div>";
+
+                await _emailService.SendEmailAsync(newUser.Email, subject, htmlMessage);
+            }
+            catch (Exception)
+            {
+                // Даже если почта по какой-то причине не ушла (например, нет интернета),
+                // мы не должны ломать регистрацию пользователя, поэтому просто логируем или игнорируем
+            }
+            // ----------------------------------------
 
             return Ok(new { message = "Регистрация прошла успешно!" });
         }
