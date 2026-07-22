@@ -17,6 +17,8 @@ namespace RayFluxMarket.Models.Entities
         // Роль пользователя: по умолчанию обычный покупатель ("User"), но сможет стать и "Admin"
         [Required]
         public string Role { get; set; } = "User";
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

@@ -2,13 +2,14 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using RayFluxMarket.Data;
 using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
 
 namespace RayFluxMarket.Controllers
 {
@@ -64,57 +65,86 @@ namespace RayFluxMarket.Controllers
                 return BadRequest(new { message = "Неверный Email или пароль." });
             }
 
-            // Проверяем, подходит ли введенный чистый пароль к хэшу из базы
-            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
-            if (!isPasswordValid)
+            // Генерируем Access и Refresh токены
+            var accessToken = GenerateAccessToken(user);
+            var refreshToken = GenerateRefreshToken();
+            // Сохраняем Refresh токен в базе данных
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
             {
-                return BadRequest(new { message = "Неверный пароль." });
+                message = "Успешный вход!",
+                accessToken = accessToken,
+                refreshToken = refreshToken
+            });
+        }
+
+        // 3. POST: api/Auth/refresh (Обновление пары токенов)
+        [HttpPost("refresh")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto dto)// здесь мы ожидаем, что клиент отправит JSON с полем "refreshToken"
+        {
+            if (string.IsNullOrEmpty(dto.RefreshToken))
+            {
+                return BadRequest(new { message = "Токен обновления не передан." });
             }
 
-            //// Если всё верно — временно возвращаем сообщение и данные пользователя
-            //return Ok(new
-            //{
-            //    message = "Вы успешно вошли!",
-            //    userId = user.Id,
-            //    email = user.Email,
-            //    role = user.Role
-            //});
+            // Ищем пользователя по Refresh-токену в базе
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == dto.RefreshToken);
 
+            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            {
+                return Unauthorized(new { message = "Недействительный или просроченный Refresh Token. Пожалуйста, войдите снова." });
+            }
 
+            // Генерируем новую пару токенов
+            var newAccessToken = GenerateAccessToken(user);
+            var newRefreshToken = GenerateRefreshToken();
 
+            // Обновляем Refresh-токен в базе (ротация токенов)
+            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
 
-            // --- ГЕНЕРАЦИЯ JWT-ТОКЕНА ---
+            return Ok(new
+            {
+                accessToken = newAccessToken,
+                refreshToken = newRefreshToken
+            });
+        }
+        // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
 
-            // 1. Создаем "Claims" (Утверждения) — данные, которые зашьем внутрь токена
-            var claims = new List<Claim>
+        private string GenerateAccessToken(User user)
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), // Зашиваем ID
-            new Claim(ClaimTypes.Email, user.Email),                  // Зашиваем Email
-            new Claim(ClaimTypes.Role, user.Role)                     // Зашиваем Роль (User/Admin)
-        };
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimTypes.Role, user.Role)
+            };
 
-            // 2. Берем наш секретный ключ из appsettings.json
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            // 3. Собираем токен воедино
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddDays(7), // Токен будет жить 7 дней
+                expires: DateTime.UtcNow.AddMinutes(15), // Access Token живет всего 15 минут!
                 signingCredentials: creds
             );
 
-            // 4. Превращаем токен в красивую длинную строку
-            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
 
-            // Возвращаем токен клиенту!
-            return Ok(new
-            {
-                message = "Вы успешно вошли!",
-                token = tokenString
-            });
+        private string GenerateRefreshToken()
+        {
+            // Создаем криптостойкую случайную строку для Refresh-токена
+            var randomNumber = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
         }
     }
 }
