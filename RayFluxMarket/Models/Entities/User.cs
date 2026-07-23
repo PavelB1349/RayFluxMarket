@@ -21,5 +21,8 @@ namespace RayFluxMarket.Models.Entities
         public DateTime? RefreshTokenExpiryTime { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public string? PasswordResetToken { get; set; }
+        public DateTime? PasswordResetTokenExpiry { get; set; }
     }
 }

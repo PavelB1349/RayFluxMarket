@@ -60,7 +60,7 @@ namespace RayFluxMarket.Controllers
                 string subject = "Добро пожаловать в RayFluxMarket!";
                 string htmlMessage = $@"
                     <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
-                        <h2 style='color: #4f46e5;'>Приветствуем в RayFluxMarket! 🚀</h2>
+                        <h2 style='color: #4f46e5;'>Приветствуем в RayFluxMarket!</h2>
                         <p>Спасибо за регистрацию в нашем интернет-магазине.</p>
                         <p>Ваш аккаунт (<b>{newUser.Email}</b>) успешно создан, и вы можете приступать к покупкам.</p>
                         <br>
@@ -162,7 +162,82 @@ namespace RayFluxMarket.Controllers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+        // 4. POST: api/Auth/forgot-password (Запрос на сброс пароля)
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (user == null)
+            {
+                // В целях безопасности не говорим, существует ли email в базе
+                return Ok(new { message = "Если такой Email зарегистрирован, мы отправили инструкцию по сбросу пароля." });
+            }
 
+            // Генерируем случайный криптостойкий токен
+            var tokenBytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(tokenBytes);
+            }
+            string resetToken = Convert.ToHexString(tokenBytes);
+
+            // Сохраняем токен и устанавливаем время жизни на 1 час
+            user.PasswordResetToken = resetToken;
+            user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
+            await _context.SaveChangesAsync();
+
+            // Отправляем письмо с токеном
+            try
+            {
+                string subject = "Сброс пароля — RayFluxMarket";
+                string htmlMessage = $@"
+                    <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
+                        <h2 style='color: #4f46e5;'>Сброс пароля</h2>
+                        <p>Вы запросили сброс пароля для вашего аккаунта <b>{user.Email}</b>.</p>
+                        <p>Ваш одноразовый код для сброса пароля:</p>
+                        <div style='background-color: #f3f4f6; padding: 12px; font-size: 18px; font-weight: bold; font-family: monospace; letter-spacing: 2px; text-align: center; margin: 15px 0;'>
+                            {resetToken}
+                        </div>
+                        <p>Код действителен в течение 1 часа.</p>
+                        <p>Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.</p>
+                        <br>
+                        <p>С уважением, <br><b>Команда RayFluxMarket</b></p>
+                    </div>";
+
+                await _emailService.SendEmailAsync(user.Email, subject, htmlMessage);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка отправки письма сброса пароля: {ex.Message}");
+            }
+
+            return Ok(new { message = "Если такой Email зарегистрирован, мы отправили инструкцию по сбросу пароля." });
+        }
+
+        // 5. POST: api/Auth/reset-password (Установка нового пароля по токену)
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.Email == dto.Email &&
+                u.PasswordResetToken == dto.Token);
+
+            if (user == null || user.PasswordResetTokenExpiry <= DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Недействительный или просроченный код сброса пароля." });
+            }
+
+            // Хэшируем новый пароль
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+
+            // Сжигаем одноразовый токен
+            user.PasswordResetToken = null;
+            user.PasswordResetTokenExpiry = null;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Пароль успешно изменен! Теперь вы можете войти с новым паролем." });
+        }
         private string GenerateRefreshToken()
         {
             // Создаем криптостойкую случайную строку для Refresh-токена
@@ -171,5 +246,8 @@ namespace RayFluxMarket.Controllers
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
         }
+
+
     }
+
 }
