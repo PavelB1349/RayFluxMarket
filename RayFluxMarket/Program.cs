@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using RayFluxMarket.Data;
-using System.Text;
 using Microsoft.OpenApi.Models;
-using Serilog;
+using RayFluxMarket.Data;
 using RayFluxMarket.Services;
+using Serilog;
+using Stripe;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +40,11 @@ builder.Services.AddCors(options =>
 builder.Services.AddMemoryCache(); // Включаем поддержку кэширования в оперативной памяти
 builder.Services.AddAuthorization(); // Включаем поддержку авторизации
 builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();// Подключаем глобальный обработчик ошибок
-builder.Services.AddProblemDetails();// 
+builder.Services.AddProblemDetails();// Подключаем поддержку ProblemDetails для более красивых ошибок
+
+// Подключаем Stripe, считывая секретный ключ из appsettings.json
+StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"]; 
+
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -99,8 +104,9 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<IFileService, FileService>();// Добавляем сервис для работы с файлами (загрузка изображений и т.д.)
-builder.Services.AddScoped<IEmailService, EmailService>();// Добавляем сервис для отправки email
+builder.Services.AddScoped<IFileService, RayFluxMarket.Services.FileService>();// Добавляем сервис для работы с файлами (загрузка изображений и т.д.)
+builder.Services.AddScoped<IEmailService, EmailService>();// Добавляем сервис для отправки email3
+builder.Services.AddScoped<IPaymentService, PaymentService>();// Добавляем сервис для работы с платежами (Stripe)
 
 var app = builder.Build();
 
