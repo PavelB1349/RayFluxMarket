@@ -169,13 +169,7 @@ namespace RayFluxMarket.Controllers
                 return NotFound(new { message = $"Заказ с ID {id} не найден." });
             }
 
-            // Валидация: можно добавить массив разрешенных статусов, чтобы админ не ввёл бред
-            var allowedStatuses = new List<string> { OrderStatus.New, OrderStatus.Processing, OrderStatus.Shipped, OrderStatus.Delivered, OrderStatus.Cancelled };
-            if (!allowedStatuses.Contains(dto.Status))
-            {
-                return BadRequest(new { message = $"Недопустимый статус. Разрешены только: {string.Join(", ", allowedStatuses)}" });
-            }
-
+           
             // Меняем статус и сохраняем
             order.Status = dto.Status;
             await _context.SaveChangesAsync();

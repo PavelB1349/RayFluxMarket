@@ -7,6 +7,8 @@ using RayFluxMarket.Services;
 using Serilog;
 using Stripe;
 using System.Text;
+using FluentValidation;
+using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +40,13 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddMemoryCache(); // Включаем поддержку кэширования в оперативной памяти
+
+// Регистрация всех валидаторов, которые есть в нашей сборке (проекте)
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+// Включение автоматической валидации (если данные кривые, сервер сам вернет 400 Bad Request)
+builder.Services.AddFluentValidationAutoValidation();
+
 builder.Services.AddAuthorization(); // Включаем поддержку авторизации
 builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();// Подключаем глобальный обработчик ошибок
 builder.Services.AddProblemDetails();// Подключаем поддержку ProblemDetails для более красивых ошибок

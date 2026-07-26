@@ -55,11 +55,7 @@ public class CartController : ControllerBase
     [HttpPost("Add")]
     public async Task<IActionResult> AddToCart(AddToCartDto dto)
     {
-        if (dto.Quantity <= 0)
-        {
-            return BadRequest(new { message = "Количество товара должно быть больше нуля." });
-        }
-
+     
         int userId = GetCurrentUserId();
 
         var product = await _context.Products.FindAsync(dto.ProductId);
