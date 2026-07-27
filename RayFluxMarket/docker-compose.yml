@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Контейнер базы данных
+  db:
+    image: postgres:15-alpine
+    container_name: rayflux_db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Контейнер твоего бэкенда
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rayflux_api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # Переопределяем настройки из appsettings.json, подставляя значения из .env
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      - Jwt__Key=${JWT_KEY}
+      - EmailSettings__SenderEmail=${EMAIL_ADDRESS}
+      - EmailSettings__Username=${EMAIL_ADDRESS}
+      - EmailSettings__Password=${EMAIL_PASSWORD}
+      - Stripe__SecretKey=${STRIPE_SECRET_KEY}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

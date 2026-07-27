@@ -41,7 +41,7 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddMemoryCache(); // Включаем поддержку кэширования в оперативной памяти
 
-// Регистрация всех валидаторов, которые есть в нашей сборке (проекте)
+// Регистрация всех валидаторов, которые есть в нашей сборке
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 // Включение автоматической валидации (если данные кривые, сервер сам вернет 400 Bad Request)
