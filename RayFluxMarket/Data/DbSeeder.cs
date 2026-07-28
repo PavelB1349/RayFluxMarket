@@ -7,10 +7,11 @@ namespace RayFluxMarket.Data
     {
         public static void Seed(AppDbContext context)
         {
-            context.Database.Migrate();
+            //context.Database.Migrate();
+            context.Database.EnsureCreated();// это гарантирует, что база данных будет создана, если она еще не существует. Это полезно для начальной настройки базы данных при первом запуске приложения.
 
             // 1. Пользователи
-            if (!context.Users.Any(u => u.Email == "admin@mail.com"))
+            if (!context.Users.Any(u => u.Email == "admin@mail.com"))// 
             {
                 context.Users.Add(new User { Email = "admin@mail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"), Role = "Admin" });
             }

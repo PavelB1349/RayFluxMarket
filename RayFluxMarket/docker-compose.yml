@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Контейнер базы данных
   db:
     image: postgres:15-alpine
     container_name: rayflux_db
@@ -14,8 +13,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    # НОВОЕ: Проверка здоровья БД. Докер будет каждые 5 секунд "стучаться" в базу
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Контейнер твоего бэкенда
   api:
     build:
       context: .
@@ -23,7 +27,6 @@ services:
     container_name: rayflux_api
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      # Переопределяем настройки из appsettings.json, подставляя значения из .env
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
       - Jwt__Key=${JWT_KEY}
       - EmailSettings__SenderEmail=${EMAIL_ADDRESS}
@@ -34,7 +37,9 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - db
+      db:
+        # НОВОЕ: API будет ждать, пока Healthcheck базы данных не вернет статус "healthy"
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
