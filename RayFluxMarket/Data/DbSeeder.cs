@@ -5,35 +5,32 @@ namespace RayFluxMarket.Data
 {
     public static class DbSeeder
     {
-        public static void Seed(AppDbContext context)
+        public static async Task SeedAsync(AppDbContext context)
         {
-            //context.Database.Migrate();
-            context.Database.EnsureCreated();// это гарантирует, что база данных будет создана, если она еще не существует. Это полезно для начальной настройки базы данных при первом запуске приложения.
-
             // 1. Пользователи
-            if (!context.Users.Any(u => u.Email == "admin@mail.com"))// 
+            if (!await context.Users.AnyAsync(u => u.Email == "admin@mail.com"))
             {
                 context.Users.Add(new User { Email = "admin@mail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"), Role = "Admin" });
             }
-            if (!context.Users.Any(u => u.Email == "user@mail.com"))
+            if (!await context.Users.AnyAsync(u => u.Email == "user@mail.com"))
             {
                 context.Users.Add(new User { Email = "user@mail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("User123!"), Role = "User" });
             }
-            context.SaveChanges();
+            await context.SaveChangesAsync();
 
-            // 2. Бренды (добавляем только если их нет)
-            if (!context.Brands.Any())
+            // 2. Бренды
+            if (!await context.Brands.AnyAsync())
             {
                 context.Brands.AddRange(
                     new Brand { Name = "Nike", Description = "Спортивная классика", LogoUrl = "" },
                     new Brand { Name = "Adidas", Description = "Стиль и комфорт", LogoUrl = "" },
                     new Brand { Name = "RayFlux Premium", Description = "Наш бренд", LogoUrl = "" }
                 );
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
 
-            // 3. Материалы (добавляем только если их нет)
-            if (!context.Materials.Any())
+            // 3. Материалы
+            if (!await context.Materials.AnyAsync())
             {
                 context.Materials.AddRange(
                     new Material { Name = "Органический хлопок" },
@@ -41,33 +38,32 @@ namespace RayFluxMarket.Data
                     new Material { Name = "Шерсть" },
                     new Material { Name = "Эластан" }
                 );
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
 
-            // 4. Категории (добавляем только если их нет)
-            if (!context.Categories.Any())
+            // 4. Категории
+            if (!await context.Categories.AnyAsync())
             {
                 var catMens = new Category { Name = "Мужская одежда" };
                 var catWomens = new Category { Name = "Женская одежда" };
                 context.Categories.AddRange(catMens, catWomens);
-                context.SaveChanges(); // Сохраняем, чтобы получить ID
+                await context.SaveChangesAsync(); // Сохраняем, чтобы получить ID
 
                 context.Categories.AddRange(
                     new Category { Name = "Худи", ParentCategoryId = catMens.Id },
                     new Category { Name = "Платья", ParentCategoryId = catWomens.Id },
                     new Category { Name = "Верхняя одежда", ParentCategoryId = catMens.Id }
                 );
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
 
-            // 5. Товары (добавляем только если товаров совсем мало - например, меньше 5)
-            // Мы берем ID из базы, чтобы привязать к существующим категориям/брендам
-            if (context.Products.Count() < 5)
+            // 5. Товары
+            if (await context.Products.CountAsync() < 5)
             {
-                var nike = context.Brands.FirstOrDefault(b => b.Name == "Nike");
-                var rayflux = context.Brands.FirstOrDefault(b => b.Name == "RayFlux Premium");
-                var catHoodies = context.Categories.FirstOrDefault(c => c.Name == "Худи");
-                var catJackets = context.Categories.FirstOrDefault(c => c.Name == "Верхняя одежда");
+                var nike = await context.Brands.FirstOrDefaultAsync(b => b.Name == "Nike");
+                var rayflux = await context.Brands.FirstOrDefaultAsync(b => b.Name == "RayFlux Premium");
+                var catHoodies = await context.Categories.FirstOrDefaultAsync(c => c.Name == "Худи");
+                var catJackets = await context.Categories.FirstOrDefaultAsync(c => c.Name == "Верхняя одежда");
 
                 if (nike != null && catHoodies != null)
                 {
@@ -94,7 +90,7 @@ namespace RayFluxMarket.Data
                         StockQuantity = 100
                     });
                 }
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
         }
     }

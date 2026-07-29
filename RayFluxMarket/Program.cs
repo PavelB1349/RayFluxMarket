@@ -131,7 +131,7 @@ using (var scope = app.Services.CreateScope())
         await context.Database.MigrateAsync();
 
         // 2. Затем заполняем первоначальными данными (если их еще нет)
-        DbSeeder.Seed(context);
+        await DbSeeder.SeedAsync(context);
     }
     catch (Exception ex)
     {
