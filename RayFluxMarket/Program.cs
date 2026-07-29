@@ -119,21 +119,24 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();// Добавля�
 
 var app = builder.Build();
 
-// --- БЛОК АВТОМАТИЧЕСКОГО ЗАПОЛНЕНИЯ БАЗЫ (SEEDING) ---
+// --- АВТОМАТИЧЕСКИЕ МИГРАЦИИ И ЗАПОЛНЕНИЕ БАЗЫ (ЕДИНЫЙ БЛОК) ---
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
-        // Вызываем наш метод
+
+        // 1. Сначала накатываем миграции
+        await context.Database.MigrateAsync();
+
+        // 2. Затем заполняем первоначальными данными (если их еще нет)
         DbSeeder.Seed(context);
     }
     catch (Exception ex)
     {
-        // Если что-то пойдет не так (например, сервер БД выключен), запишем это в наш Serilog
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Произошла ошибка во время Seeding базы данных.");
+        logger.LogError(ex, "Ошибка при авто-миграции или Seeding базы данных.");
     }
 }
 app.UseSerilogRequestLogging();
@@ -155,5 +158,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
 
 app.Run();
