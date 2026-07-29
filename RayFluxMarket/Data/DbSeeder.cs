@@ -77,7 +77,8 @@ namespace RayFluxMarket.Data
                         Description = "Удобное мужское худи.",
                         Price = 35000,
                         BrandId = nike.Id,
-                        CategoryId = catHoodies.Id
+                        CategoryId = catHoodies.Id,
+                        StockQuantity = 50
                     });
                 }
 
@@ -89,7 +90,8 @@ namespace RayFluxMarket.Data
                         Description = "Зимнее пальто.",
                         Price = 120000,
                         BrandId = rayflux.Id,
-                        CategoryId = catJackets.Id
+                        CategoryId = catJackets.Id,
+                        StockQuantity = 100
                     });
                 }
                 context.SaveChanges();

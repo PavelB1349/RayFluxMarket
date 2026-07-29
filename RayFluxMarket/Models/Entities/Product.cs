@@ -37,6 +37,8 @@ namespace RayFluxMarket.Models.Entities
         // Список материалов (хлопок, шерсть...)
         public List<Material> Materials { get; set; } = new();
 
+        // Флаг для мягкого удаления (true - активен на витрине, false - скрыт/удален)
+        public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

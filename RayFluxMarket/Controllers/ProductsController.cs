@@ -48,6 +48,7 @@ public class ProductsController : ControllerBase
             .Include(p => p.Images)
             .Include(p => p.Brand)
             .Include(p => p.Category)
+            .Where(p => p.IsActive)// <-- Фильтруем только активные товары
             .AsNoTracking()
             .AsQueryable();
 
@@ -101,7 +102,7 @@ public class ProductsController : ControllerBase
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id);
 
-        if (product == null) return NotFound();
+        if (product == null || !product.IsActive) return NotFound(new { message = "Товар не найден или удален." });
         return product;
     }
 
@@ -124,6 +125,7 @@ public class ProductsController : ControllerBase
         product.Name = dto.Name;
         product.Description = dto.Description;
         product.Price = dto.Price;
+        product.StockQuantity = dto.StockQuantity;
         product.Season = dto.Season;
         product.Collection = dto.Collection;
         product.CategoryId = dto.CategoryId;
@@ -174,6 +176,7 @@ public class ProductsController : ControllerBase
             Name = dto.Name,
             Description = dto.Description,
             Price = dto.Price,
+            StockQuantity = dto.StockQuantity,
             Season = dto.Season,
             Collection = dto.Collection,
             CategoryId = dto.CategoryId,
@@ -245,7 +248,8 @@ public class ProductsController : ControllerBase
             _context.ProductImages.RemoveRange(product.Images);
         }
 
-        _context.Products.Remove(product);
+        // Мягкое удаление: не удаляем физически из базы, а делаем неактивным
+        product.IsActive = false;
         await _context.SaveChangesAsync();
 
         ClearProductsCache(); // <-- Очищаем кэш после удаления товара, чтобы клиенты не видели устаревшие данные

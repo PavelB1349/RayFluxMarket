@@ -52,7 +52,7 @@ builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptio
 builder.Services.AddProblemDetails();// Подключаем поддержку ProblemDetails для более красивых ошибок
 
 // Подключаем Stripe, считывая секретный ключ из appsettings.json
-StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"]; 
+StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -141,12 +141,11 @@ app.UseSerilogRequestLogging();
 app.UseExceptionHandler(); // Включает глобальный перехватчик ошибок
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(); // Без параметров он ищет страницу по адресу /swagger/index.html
-    //app.MapOpenApi();
-}
+
+app.UseSwagger();
+app.UseSwaggerUI(); // Без параметров он ищет страницу по адресу /swagger/index.html
+                    //app.MapOpenApi();
+
 
 app.UseHttpsRedirection();
 app.UseStaticFiles(); // Открывает папку wwwroot для веба

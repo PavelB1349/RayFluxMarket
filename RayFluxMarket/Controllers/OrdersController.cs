@@ -7,6 +7,7 @@ using RayFluxMarket.Models.DTOs;
 using RayFluxMarket.Models.Entities;
 using RayFluxMarket.Models.Enums;
 using System.Security.Claims;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace RayFluxMarket.Controllers
 {
@@ -17,10 +18,12 @@ namespace RayFluxMarket.Controllers
     {
         private readonly AppDbContext _context;
         //private const int MockUserId = 1; // Временная заглушка пользователя
+        private readonly IMemoryCache _cache;
 
-        public OrdersController(AppDbContext context)
+        public OrdersController(AppDbContext context, IMemoryCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
         // 1. POST: api/Orders/Checkout (Оформить заказ из корзины)
@@ -85,6 +88,11 @@ namespace RayFluxMarket.Controllers
 
             // Сохраняем все изменения в базе одной транзакцией
             await _context.SaveChangesAsync();
+
+            if (_cache is MemoryCache memoryCache)// Проверяем, что кэш действительно является MemoryCache
+            {
+                memoryCache.Compact(1.0); // 1.0 означает сброс кэша на 100%
+            }
 
             return CreatedAtAction(nameof(GetOrderById), new { id = order.Id }, new { message = "Заказ успешно оформлен!", orderId = order.Id });
         }
@@ -176,6 +184,48 @@ namespace RayFluxMarket.Controllers
 
             return Ok(new { message = $"Статус заказа №{id} успешно изменен на '{dto.Status}'.", orderId = id, newStatus = order.Status });
         }
+
+        // 5. GET: api/Orders/admin/all (Получить ВСЕ заказы в системе — ТОЛЬКО ДЛЯ АДМИНА)
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<IEnumerable<OrderDto>>> GetAllOrders([FromQuery] string? status)
+        {
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .AsNoTracking()
+                .AsQueryable();
+
+            // Если передали параметр фильтрации (например ?status=Paid), фильтруем
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(o => o.Status == status);
+            }
+
+            var orders = await query
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+
+            var orderDtos = orders.Select(o => new OrderDto
+            {
+                Id = o.Id,
+                UserId = o.UserId,
+                OrderDate = o.OrderDate,
+                Status = o.Status,
+                TotalAmount = o.TotalAmount,
+                Items = o.OrderItems.Select(oi => new OrderItemDto
+                {
+                    ProductId = oi.ProductId,
+                    ProductName = oi.Product?.Name ?? "Товар удален из каталога",
+                    Quantity = oi.Quantity,
+                    Price = oi.Price
+                }).ToList()
+            }).ToList();
+
+            return Ok(orderDtos);
+        }
+
+
         private int GetCurrentUserId()
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
