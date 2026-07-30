@@ -34,7 +34,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         // 3000 - стандартный порт React, 5173 - стандартный порт Vite (Vue/React)
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.AllowAnyOrigin() // Разрешаем любые источники (для разработки можно, но в проде лучше конкретные домены)
               .AllowAnyHeader()  // Разрешаем любые заголовки (включая Authorization с токеном)
               .AllowAnyMethod(); // Разрешаем любые методы (GET, POST, PUT, DELETE)
     });
