@@ -40,7 +40,7 @@ namespace RayFluxMarket.Controllers
                 return BadRequest(new { message = "Пользователь с таким Email уже зарегистрирован." });
             }
 
-            // Хэшируем пароль — превращаем "123456" в нечитаемую строку "$2a$11$..."
+            // Хэшируем пароль
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
             // Создаем модель для базы данных
@@ -48,8 +48,15 @@ namespace RayFluxMarket.Controllers
             {
                 Email = dto.Email,
                 PasswordHash = passwordHash,
-                Role = "User" // По умолчанию все обычные покупатели
+                Role = "User"
             };
+
+            // Генерируем Access и Refresh токены
+            var accessToken = GenerateAccessToken(newUser);
+            var refreshToken = GenerateRefreshToken();
+
+            newUser.RefreshToken = refreshToken;
+            newUser.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
@@ -71,29 +78,35 @@ namespace RayFluxMarket.Controllers
             }
             catch (Exception)
             {
-                // Даже если почта по какой-то причине не ушла (например, нет интернета),
-                // мы не должны ломать регистрацию пользователя, поэтому просто логируем или игнорируем
+                // Игнорируем ошибки почты, чтобы не ломать регистрацию
             }
-            // ----------------------------------------
 
-            return Ok(new { message = "Регистрация прошла успешно!" });
+            return Ok(new
+            {
+                token = accessToken,
+                accessToken = accessToken,
+                refreshToken = refreshToken,
+                user = new
+                {
+                    id = newUser.Id,
+                    email = newUser.Email
+                }
+            });
         }
 
         // 2. POST: api/Auth/Login (Вход в систему)
         [HttpPost("Login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            // Ищем пользователя в базе по Email
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user == null)
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             {
                 return BadRequest(new { message = "Неверный Email или пароль." });
             }
 
-            // Генерируем Access и Refresh токены
             var accessToken = GenerateAccessToken(user);
             var refreshToken = GenerateRefreshToken();
-            // Сохраняем Refresh токен в базе данных
+
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await _context.SaveChangesAsync();
@@ -101,21 +114,26 @@ namespace RayFluxMarket.Controllers
             return Ok(new
             {
                 message = "Успешный вход!",
+                token = accessToken,
                 accessToken = accessToken,
-                refreshToken = refreshToken
+                refreshToken = refreshToken,
+                user = new
+                {
+                    id = user.Id,
+                    email = user.Email
+                }
             });
         }
 
         // 3. POST: api/Auth/refresh (Обновление пары токенов)
         [HttpPost("refresh")]
-        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto dto)// здесь мы ожидаем, что клиент отправит JSON с полем "refreshToken"
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto dto)
         {
             if (string.IsNullOrEmpty(dto.RefreshToken))
             {
                 return BadRequest(new { message = "Токен обновления не передан." });
             }
 
-            // Ищем пользователя по Refresh-токену в базе
             var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == dto.RefreshToken);
 
             if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
@@ -123,45 +141,21 @@ namespace RayFluxMarket.Controllers
                 return Unauthorized(new { message = "Недействительный или просроченный Refresh Token. Пожалуйста, войдите снова." });
             }
 
-            // Генерируем новую пару токенов
             var newAccessToken = GenerateAccessToken(user);
             var newRefreshToken = GenerateRefreshToken();
 
-            // Обновляем Refresh-токен в базе (ротация токенов)
             user.RefreshToken = newRefreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
+                token = newAccessToken,
                 accessToken = newAccessToken,
                 refreshToken = newRefreshToken
             });
         }
-        // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
 
-        private string GenerateAccessToken(User user)
-        {
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role)
-            };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(15), // Access Token живет всего 15 минут!
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
         // 4. POST: api/Auth/forgot-password (Запрос на сброс пароля)
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
@@ -169,11 +163,9 @@ namespace RayFluxMarket.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (user == null)
             {
-                // В целях безопасности не говорим, существует ли email в базе
                 return Ok(new { message = "Если такой Email зарегистрирован, мы отправили инструкцию по сбросу пароля." });
             }
 
-            // Генерируем случайный криптостойкий токен
             var tokenBytes = new byte[32];
             using (var rng = RandomNumberGenerator.Create())
             {
@@ -181,12 +173,10 @@ namespace RayFluxMarket.Controllers
             }
             string resetToken = Convert.ToHexString(tokenBytes);
 
-            // Сохраняем токен и устанавливаем время жизни на 1 час
             user.PasswordResetToken = resetToken;
             user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
             await _context.SaveChangesAsync();
 
-            // Отправляем письмо с токеном
             try
             {
                 string subject = "Сброс пароля — RayFluxMarket";
@@ -227,10 +217,7 @@ namespace RayFluxMarket.Controllers
                 return BadRequest(new { message = "Недействительный или просроченный код сброса пароля." });
             }
 
-            // Хэшируем новый пароль
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
-
-            // Сжигаем одноразовый токен
             user.PasswordResetToken = null;
             user.PasswordResetTokenExpiry = null;
 
@@ -238,16 +225,38 @@ namespace RayFluxMarket.Controllers
 
             return Ok(new { message = "Пароль успешно изменен! Теперь вы можете войти с новым паролем." });
         }
+
+        // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
+
+        private string GenerateAccessToken(User user)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimTypes.Role, user.Role)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(15),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
         private string GenerateRefreshToken()
         {
-            // Создаем криптостойкую случайную строку для Refresh-токена
             var randomNumber = new byte[64];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
         }
-
-
     }
-
 }
