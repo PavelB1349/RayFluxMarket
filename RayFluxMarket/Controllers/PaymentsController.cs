@@ -18,6 +18,7 @@ namespace RayFluxMarket.Controllers
         private readonly AppDbContext _context;
         private readonly IPaymentService _paymentService;
         private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
         private readonly string _webhookSecret;
 
         public PaymentsController(
@@ -29,6 +30,7 @@ namespace RayFluxMarket.Controllers
             _context = context;
             _paymentService = paymentService;
             _emailService = emailService;
+            _configuration = configuration;
             _webhookSecret = configuration["Stripe:WebhookSecret"];
         }
 
@@ -51,7 +53,11 @@ namespace RayFluxMarket.Controllers
                 return BadRequest(new { message = "Этот заказ уже оплачен." });
             }
 
-            string domain = $"{Request.Scheme}://{Request.Host}";
+            // Берём Origin запроса из React-приложения, а если его нет — используем Host или схему по умолчанию
+            string domain = Request.Headers["Origin"].FirstOrDefault() 
+                            ?? Request.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
+                            ?? _configuration["FrontendUrl"] 
+                            ?? $"{Request.Scheme}://{Request.Host}";
 
             try
             {
