@@ -74,7 +74,11 @@ namespace RayFluxMarket.Data
                         Price = 35000,
                         BrandId = nike.Id,
                         CategoryId = catHoodies.Id,
-                        StockQuantity = 50
+                        StockQuantity = 50,
+                        Images = new List<ProductImage>
+                        {
+                            new ProductImage { Url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse4.mm.bing.net%2Fth%2Fid%2FOIP.VlyI71Mmm2ImGnD-zZynKgHaJb%3Fr%3D0%26pid%3DApi&f=1&ipt=de0b7e48d915f3ce0a611fb2b27f26efece020c6cd3307f2ed9ffc3899e5b9d1&ipo=images", IsPrimary = true }
+                        }
                     });
                 }
 
@@ -87,7 +91,11 @@ namespace RayFluxMarket.Data
                         Price = 120000,
                         BrandId = rayflux.Id,
                         CategoryId = catJackets.Id,
-                        StockQuantity = 100
+                        StockQuantity = 100,
+                        Images = new List<ProductImage>
+                        {
+                            new ProductImage { Url = "https://ae01.alicdn.com/kf/Hd53eeeb9c5c34b4c91a6cff08ee1f165l.jpg_.webp", IsPrimary = true }
+                        }
                     });
                 }
                 await context.SaveChangesAsync();
