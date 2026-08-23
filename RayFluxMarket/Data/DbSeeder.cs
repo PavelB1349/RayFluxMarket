@@ -58,7 +58,7 @@ namespace RayFluxMarket.Data
             }
 
             // 5. Товары
-            if (await context.Products.CountAsync() < 5)
+            if (!await context.Products.AnyAsync())
             {
                 var nike = await context.Brands.FirstOrDefaultAsync(b => b.Name == "Nike");
                 var rayflux = await context.Brands.FirstOrDefaultAsync(b => b.Name == "RayFlux Premium");
