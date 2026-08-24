@@ -107,6 +107,7 @@ namespace RayFluxMarket.Controllers
             var orders = await _context.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.Images)
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
@@ -122,6 +123,7 @@ namespace RayFluxMarket.Controllers
                 {
                     ProductId = oi.ProductId,
                     ProductName = oi.Product?.Name ?? "Товар удален из каталога",
+                    ProductImageUrl = oi.Product?.Images.FirstOrDefault()?.Url,
                     Quantity = oi.Quantity,
                     Price = oi.Price
                 }).ToList()
@@ -138,6 +140,7 @@ namespace RayFluxMarket.Controllers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.Images)
                 .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
 
             if (order == null)
@@ -156,6 +159,7 @@ namespace RayFluxMarket.Controllers
                 {
                     ProductId = oi.ProductId,
                     ProductName = oi.Product?.Name ?? "Товар удален из каталога",
+                    ProductImageUrl = oi.Product?.Images.FirstOrDefault()?.Url,
                     Quantity = oi.Quantity,
                     Price = oi.Price
                 }).ToList()
