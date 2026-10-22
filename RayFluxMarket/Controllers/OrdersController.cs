@@ -28,7 +28,7 @@ namespace RayFluxMarket.Controllers
 
         // 1. POST: api/Orders/Checkout (Оформить заказ из корзины)
         [HttpPost("Checkout")]
-        public async Task<IActionResult> Checkout()
+        public async Task<IActionResult> Checkout([FromBody] CheckoutDto dto) // принимаем дтошку
         {
             int userId = GetCurrentUserId();
             // 1. Достаем элементы корзины пользователя вместе с данными о товарах
@@ -48,7 +48,11 @@ namespace RayFluxMarket.Controllers
                 UserId = userId,
                 OrderDate = DateTime.UtcNow,
                 Status = OrderStatus.New,
-                TotalAmount = 0 // Посчитаем ниже
+                TotalAmount = 0,
+                CustomerName = dto.CustomerName,
+                PhoneNumber = dto.PhoneNumber,
+                ShippingAddress = dto.ShippingAddress,
+                Comment = dto.Comment
             };
 
             // 3. Переносим товары из корзины в позиции заказа и списываем со склада

@@ -19,6 +19,7 @@ namespace RayFluxMarket.Validators
             var allowedStatuses = new List<string>
             {
                 OrderStatus.New,
+                OrderStatus.Paid,
                 OrderStatus.Processing,
                 OrderStatus.Shipped,
                 OrderStatus.Delivered,

@@ -238,18 +238,22 @@ public class ProductsController : ControllerBase
             return NotFound(new { message = $"Товар с ID {id} не найден." });
         }
 
-        if (product.Images.Any())
+        // покупал ли кто-нибудь этот товар ранее?
+        bool wasOrdered = await _context.OrderItems.AnyAsync(oi => oi.ProductId == id);
+        if (!wasOrdered)
         {
-            // Удаляем физические файлы с диска сервера!
             foreach (var img in product.Images)
             {
                 fileService.DeleteProductImage(img.Url);
             }
-            _context.ProductImages.RemoveRange(product.Images);
+            _context.Products.Remove(product);
         }
-
-        // Мягкое удаление: не удаляем физически из базы, а делаем неактивным
-        product.IsActive = false;
+        else
+        {
+            // Картинки НЕ трогаем, чтобы не сломать людям чеки.
+            // Просто скрываем его с витрины:
+            product.IsActive = false;
+        }
         await _context.SaveChangesAsync();
 
         ClearProductsCache(); // <-- Очищаем кэш после удаления товара, чтобы клиенты не видели устаревшие данные
