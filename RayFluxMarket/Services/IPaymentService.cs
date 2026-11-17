@@ -1,9 +1,11 @@
-﻿using RayFluxMarket.Models.Entities;
-
-namespace RayFluxMarket.Services
+﻿namespace RayFluxMarket.Services
 {
     public interface IPaymentService
     {
-        Task<string> CreateCheckoutSessionAsync(Order order, string domain);
+        // Создаёт Stripe Checkout-сессию для заказа и возвращает URL страницы оплаты
+        Task<string> CreateCheckoutSessionAsync(int orderId, string domain);
+
+        // Обрабатывает webhook от Stripe (проверка подписи, обновление статуса, отправка чека)
+        Task HandleWebhookAsync(string json, string stripeSignature);
     }
 }

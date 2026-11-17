@@ -115,7 +115,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IFileService, RayFluxMarket.Services.FileService>();// Добавляем сервис для работы с файлами (загрузка изображений и т.д.)
 builder.Services.AddScoped<IEmailService, EmailService>();// Добавляем сервис для отправки email3
-builder.Services.AddScoped<IPaymentService, PaymentService>();// Добавляем сервис для работы с платежами (Stripe)
+builder.Services.AddScoped<IPaymentService, PaymentService>();// Добавляем сервис для работы с платежами (Stripe)           
+builder.Services.AddScoped<IAuthService, AuthService>();// Сервис аутентификации (регистрация, логин, refresh, сброс пароля)
+builder.Services.AddScoped<ICartService, CartService>();// Сервис корзины (CRUD по CartItem)                                
+builder.Services.AddScoped<IOrderService, OrderService>();// Сервис заказов (оформление, чтение, смена статуса)   
 
 var app = builder.Build();
 

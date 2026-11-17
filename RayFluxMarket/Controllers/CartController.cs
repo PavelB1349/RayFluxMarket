@@ -1,160 +1,74 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using RayFluxMarket.Data;
-using RayFluxMarket.Models.DTOs;
-using RayFluxMarket.Models.Entities;
-using System.Security.Claims; // Нужен для чтения Claims из токена
+﻿using Microsoft.AspNetCore.Authorization;                                                                                                                    
+using Microsoft.AspNetCore.Mvc;                                                                                                                               
+using RayFluxMarket.Extensions;                                                                                                                               
+using RayFluxMarket.Models.DTOs;                                                                                                                              
+using RayFluxMarket.Services;
 
-
-[Route("api/[controller]")]
-[ApiController]
-[Authorize]
-public class CartController : ControllerBase
+namespace RayFluxMarket.Controllers
 {
-    private readonly AppDbContext _context; 
 
-    
 
-    public CartController(AppDbContext context)
+    [Route("api/[controller]")]
+    [ApiController]
+    [Authorize]
+    public class CartController : ControllerBase
     {
-        _context = context;
-    }
+        private readonly ICartService _cartService;
 
-    // 1. GET: api/Cart
-    [HttpGet]
-    public async Task<ActionResult<CartDto>> GetCart()
-    {
-        int userId = GetCurrentUserId(); // Вытаскиваем реальный ID из токена
-
-        var cartItems = await _context.CartItems
-            .Include(ci => ci.Product)
-                .ThenInclude(p => p.Images)
-            .Where(ci => ci.UserId == userId) // Используем реальный ID
-            .ToListAsync();
-
-        var cartDto = new CartDto
+        public CartController(ICartService cartService)
         {
-            Items = cartItems.Select(ci => new CartItemSummaryDto
-            {
-                ProductId = ci.ProductId,
-                ProductName = ci.Product?.Name ?? "Товар удален",
-                Price = ci.Product?.Price ?? 0,
-                MainImageUrl = ci.Product?.Images != null && ci.Product.Images.Any()
-                    ? ci.Product.Images.FirstOrDefault()?.Url
-                    : null,
-                Quantity = ci.Quantity
-            }).ToList()
-        };
-
-        return Ok(cartDto);
-    }
-
-    // 2. POST: api/Cart/Add
-    [HttpPost("Add")]
-    public async Task<IActionResult> AddToCart(AddToCartDto dto)
-    {
-     
-        int userId = GetCurrentUserId();
-
-        var product = await _context.Products.FindAsync(dto.ProductId);
-        if (product == null)
-        {
-            return NotFound(new { message = "Товар не найден." });
+            _cartService = cartService;
         }
 
-        var existingItem = await _context.CartItems
-            .FirstOrDefaultAsync(ci => ci.UserId == userId && ci.ProductId == dto.ProductId);
-
-        if (existingItem != null)
+        // 1. GET: api/Cart                                                                                                     
+        [HttpGet]
+        public async Task<ActionResult<CartDto>> GetCart()
         {
-            existingItem.Quantity += dto.Quantity;
-        }
-        else
-        {
-            var newItem = new CartItem
-            {
-                UserId = userId,
-                ProductId = dto.ProductId,
-                Quantity = dto.Quantity
-            };
-            _context.CartItems.Add(newItem);
+            int userId = User.GetUserId();
+            var cartDto = await _cartService.GetCartAsync(userId);
+            return Ok(cartDto);
         }
 
-        await _context.SaveChangesAsync();
-        return Ok(new { message = "Товар успешно добавлен в корзину." });
-    }
-
-    // 3. PUT: api/Cart/UpdateQuantity
-    [HttpPut("UpdateQuantity")]
-    public async Task<IActionResult> UpdateQuantity(AddToCartDto dto)
-    {
-        int userId = GetCurrentUserId();
-
-        var cartItem = await _context.CartItems
-            .FirstOrDefaultAsync(ci => ci.UserId == userId && ci.ProductId == dto.ProductId);
-
-        if (cartItem == null)
+        // 2. POST: api/Cart/Add                                                                                                
+        [HttpPost("Add")]
+        public async Task<IActionResult> AddToCart(AddToCartDto dto)
         {
-            return NotFound(new { message = "Товар в корзине не найден." });
+            int userId = User.GetUserId();
+            await _cartService.AddToCartAsync(userId, dto);
+            return Ok(new { message = "Товар успешно добавлен в корзину." });
         }
 
-        if (dto.Quantity <= 0)
+        // 3. PUT: api/Cart/UpdateQuantity                                                                                      
+        [HttpPut("UpdateQuantity")]
+        public async Task<IActionResult> UpdateQuantity(AddToCartDto dto)
         {
-            _context.CartItems.Remove(cartItem);
-            await _context.SaveChangesAsync();
+            int userId = User.GetUserId();
+            await _cartService.UpdateQuantityAsync(userId, dto);
+
+            var message = dto.Quantity <= 0
+                ? "Товар удален из корзины."
+                : "Количество товара обновлено.";
+
+            return Ok(new { message });
+        }
+
+        // 4. DELETE: api/Cart/Remove/{productId}                                                                               
+        [HttpDelete("Remove/{productId}")]
+        public async Task<IActionResult> RemoveFromCart(int productId)
+        {
+            int userId = User.GetUserId();
+            await _cartService.RemoveFromCartAsync(userId, productId);
             return Ok(new { message = "Товар удален из корзины." });
         }
 
-        cartItem.Quantity = dto.Quantity;
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Количество товара обновлено." });
-    }
-
-    // 4. DELETE: api/Cart/Remove/{productId}
-    [HttpDelete("Remove/{productId}")]
-    public async Task<IActionResult> RemoveFromCart(int productId)
-    {
-        int userId = GetCurrentUserId();
-
-        var cartItem = await _context.CartItems
-            .FirstOrDefaultAsync(ci => ci.UserId == userId && ci.ProductId == productId);
-
-        if (cartItem == null)
+        // 5. DELETE: api/Cart/Clear                                                                                            
+        [HttpDelete("Clear")]
+        public async Task<IActionResult> ClearCart()
         {
-            return NotFound(new { message = "Товар в корзине не найден." });
+            int userId = User.GetUserId();
+            await _cartService.ClearCartAsync(userId);
+            return Ok(new { message = "Корзина полностью очищена." });
         }
-
-        _context.CartItems.Remove(cartItem);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Товар удален из корзины." });
-    }
-
-    // 5. DELETE: api/Cart/Clear
-    [HttpDelete("Clear")]
-    public async Task<IActionResult> ClearCart()
-    {
-        int userId = GetCurrentUserId();
-
-        var userItems = _context.CartItems.Where(ci => ci.UserId == userId);
-
-        _context.CartItems.RemoveRange(userItems);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Корзина полностью очищена." });
-    }
-
-    // СЕКРЕТНЫЙ МЕТОД: Вытаскивает ID из "паспорта" (токена) текущего запроса
-    private int GetCurrentUserId()
-    {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-        if (userIdClaim == null)
-        {
-            throw new UnauthorizedAccessException("Пользователь не авторизован.");
-        }
-        return int.Parse(userIdClaim.Value);
+        
     }
 }
