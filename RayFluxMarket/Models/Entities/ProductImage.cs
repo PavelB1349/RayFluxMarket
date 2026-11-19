@@ -6,5 +6,6 @@
         public string Url { get; set; } = string.Empty;
         public bool IsPrimary { get; set; } // Главное фото или нет
         public int ProductId { get; set; }
+        public Product? Product { get; set; }
     }
 }

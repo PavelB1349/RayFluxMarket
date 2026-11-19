@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Stripe;
 using System.Net;
 
 namespace RayFluxMarket.Infrastructure
@@ -29,12 +31,38 @@ namespace RayFluxMarket.Infrastructure
                 Detail = "На сервере произошла непредвиденная ошибка. Наша команда уже уведомлена и работает над исправлением."
             };
 
-            // Можно перехватывать конкретные ошибки и менять статус-код. Например:
-            if (exception is UnauthorizedAccessException)
+            // Маппинг доменных исключений в корректные HTTP-статусы
+            switch (exception)
             {
-                problemDetails.Status = (int)HttpStatusCode.Unauthorized;
-                problemDetails.Title = "Нет доступа";
-                problemDetails.Detail = exception.Message;
+                case UnauthorizedAccessException:
+                    problemDetails.Status = (int)HttpStatusCode.Unauthorized;
+                    problemDetails.Title = "Нет доступа";
+                    problemDetails.Detail = exception.Message;
+                    break;
+
+                case KeyNotFoundException:
+                    problemDetails.Status = (int)HttpStatusCode.NotFound;
+                    problemDetails.Title = "Не найдено";
+                    problemDetails.Detail = exception.Message;
+                    break;
+
+                case InvalidOperationException:
+                    problemDetails.Status = (int)HttpStatusCode.BadRequest;
+                    problemDetails.Title = "Некорректная операция";
+                    problemDetails.Detail = exception.Message;
+                    break;
+
+                case StripeException stripeEx:
+                    problemDetails.Status = (int)HttpStatusCode.BadRequest;
+                    problemDetails.Title = "Ошибка платёжной системы";
+                    problemDetails.Detail = stripeEx.Message;
+                    break;
+
+                case DbUpdateException:
+                    problemDetails.Status = (int)HttpStatusCode.Conflict;
+                    problemDetails.Title = "Конфликт данных";
+                    problemDetails.Detail = "Не удалось сохранить изменения: нарушено ограничение целостности данных.";
+                    break;
             }
 
             // 3. Настраиваем HTTP-ответ

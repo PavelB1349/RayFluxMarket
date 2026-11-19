@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using RayFluxMarket.Extensions;
 using RayFluxMarket.Services;
 using Stripe;
 
@@ -19,15 +21,24 @@ namespace RayFluxMarket.Controllers
 
         // POST: api/Payments/create-checkout-session/5
         [HttpPost("create-checkout-session/{orderId}")]
+        [Authorize] // платёжную сессию может создать только авторизованный пользователь
         public async Task<IActionResult> CreateCheckoutSession(int orderId)
         {
-            // Берём Origin запроса из React-приложения, а если его нет — используем Host или схему по умолчанию
-            string domain = Request.Headers["Origin"].FirstOrDefault()
-                            ?? Request.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
-                            ?? _configuration["FrontendUrl"]
-                            ?? $"{Request.Scheme}://{Request.Host}";
+            // Берём Origin запроса из React-приложения, а если его нет — используем Host или схему по умолчанию.
+            // Referer содержит полный адрес страницы, поэтому из него нужно выделить только схему и хост,
+            // иначе SuccessUrl/CancelUrl получатся битыми (https://site/cart/checkout-success).
+            string? referer = Request.Headers["Referer"].FirstOrDefault();
+            string? refererOrigin = Uri.TryCreate(referer, UriKind.Absolute, out var refererUri)
+                ? refererUri.GetLeftPart(UriPartial.Authority)
+                : null;
 
-            string checkoutUrl = await _paymentService.CreateCheckoutSessionAsync(orderId, domain);
+            string domain = (Request.Headers["Origin"].FirstOrDefault()
+                             ?? refererOrigin
+                             ?? _configuration["FrontendUrl"]
+                             ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
+
+            int userId = User.GetUserId();
+            string checkoutUrl = await _paymentService.CreateCheckoutSessionAsync(userId, orderId, domain);
             return Ok(new { url = checkoutUrl });
         }
 

@@ -9,7 +9,7 @@ namespace RayFluxMarket.Validators
         {
             RuleFor(x => x.Name)
                 .NotEmpty().WithMessage("Название товара обязательно.")
-                .MaximumLength(150).WithMessage("Название не должно превышать 150 символов.");
+                .MaximumLength(100).WithMessage("Название не должно превышать 100 символов.");
 
             RuleFor(x => x.Description)
                 .NotEmpty().WithMessage("Описание товара обязательно.")

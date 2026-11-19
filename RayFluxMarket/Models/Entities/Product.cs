@@ -40,5 +40,9 @@ namespace RayFluxMarket.Models.Entities
         // Флаг для мягкого удаления (true - активен на витрине, false - скрыт/удален)
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Оптимистичная блокировка: защита от oversell при одновременном checkout
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
     }
 }

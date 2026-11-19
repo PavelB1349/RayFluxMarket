@@ -27,5 +27,9 @@ namespace RayFluxMarket.Models.Entities
 
         // Навигационное свойство: список позиций в этом заказе
         public List<OrderItem> OrderItems { get; set; } = new();
+
+        // Оптимистичная блокировка: защита от двойной оплаты/смены статуса
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
     }
 }

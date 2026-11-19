@@ -85,6 +85,9 @@ namespace RayFluxMarket.Migrations
 
                     b.HasIndex("ProductId");
 
+                    b.HasIndex("UserId", "ProductId")
+                        .IsUnique();
+
                     b.ToTable("CartItems");
                 });
 
@@ -150,6 +153,11 @@ namespace RayFluxMarket.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
+
                     b.Property<string>("ShippingAddress")
                         .IsRequired()
                         .HasColumnType("text");
@@ -159,12 +167,17 @@ namespace RayFluxMarket.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Orders");
                 });
@@ -181,6 +194,7 @@ namespace RayFluxMarket.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ProductId")
@@ -230,7 +244,13 @@ namespace RayFluxMarket.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.Property<string>("Season")
                         .HasColumnType("text");
@@ -309,6 +329,9 @@ namespace RayFluxMarket.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Email")
+                        .IsUnique();
+
                     b.ToTable("Users");
                 });
 
@@ -358,7 +381,7 @@ namespace RayFluxMarket.Migrations
                     b.HasOne("RayFluxMarket.Models.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Order");
@@ -371,13 +394,13 @@ namespace RayFluxMarket.Migrations
                     b.HasOne("RayFluxMarket.Models.Entities.Brand", "Brand")
                         .WithMany()
                         .HasForeignKey("BrandId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RayFluxMarket.Models.Entities.Category", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Brand");
@@ -387,11 +410,13 @@ namespace RayFluxMarket.Migrations
 
             modelBuilder.Entity("RayFluxMarket.Models.Entities.ProductImage", b =>
                 {
-                    b.HasOne("RayFluxMarket.Models.Entities.Product", null)
+                    b.HasOne("RayFluxMarket.Models.Entities.Product", "Product")
                         .WithMany("Images")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("RayFluxMarket.Models.Entities.Category", b =>

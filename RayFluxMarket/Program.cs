@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using RayFluxMarket.Configuration;
 using RayFluxMarket.Data;
 using RayFluxMarket.Services;
 using Serilog;
@@ -51,6 +52,22 @@ builder.Services.AddAuthorization(); // Включаем поддержку ав
 builder.Services.AddExceptionHandler<RayFluxMarket.Infrastructure.GlobalExceptionHandler>();// Подключаем глобальный обработчик ошибок
 builder.Services.AddProblemDetails();// Подключаем поддержку ProblemDetails для более красивых ошибок
 
+// Регистрируем типизированные настройки с валидацией при старте
+builder.Services.AddOptions<JwtSettings>()
+    .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<EmailSettings>()
+    .Bind(builder.Configuration.GetSection(EmailSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<StripeSettings>()
+    .Bind(builder.Configuration.GetSection(StripeSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // Подключаем Stripe, считывая секретный ключ из appsettings.json
 StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
@@ -58,15 +75,18 @@ StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+            ?? throw new InvalidOperationException("Секция Jwt не настроена.");
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
         };
     });
 // 1. Добавляем сервисы для генерации Swagger
@@ -119,6 +139,7 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();// Добавля�
 builder.Services.AddScoped<IAuthService, AuthService>();// Сервис аутентификации (регистрация, логин, refresh, сброс пароля)
 builder.Services.AddScoped<ICartService, CartService>();// Сервис корзины (CRUD по CartItem)                                
 builder.Services.AddScoped<IOrderService, OrderService>();// Сервис заказов (оформление, чтение, смена статуса)   
+builder.Services.AddScoped<IProductService, RayFluxMarket.Services.ProductService>();// Сервис товаров (CRUD, фильтрация, кэш, файлы)
 
 var app = builder.Build();
 

@@ -9,14 +9,16 @@ namespace RayFluxMarket.Services
 {                                                                                                                           
     public class OrderService : IOrderService                                                                               
     {                                                                                                                       
-        private readonly AppDbContext _context;                                                                             
-        private readonly IMemoryCache _cache;                                                                               
-                                                                                                                            
-        public OrderService(AppDbContext context, IMemoryCache cache)                                                       
-        {                                                                                                                   
-            _context = context;                                                                                             
-            _cache = cache;                                                                                                 
-        }                                                                                                                   
+        private readonly AppDbContext _context;
+        private readonly IMemoryCache _cache;
+        private readonly IEmailService _emailService;
+
+        public OrderService(AppDbContext context, IMemoryCache cache, IEmailService emailService)
+        {
+            _context = context;
+            _cache = cache;
+            _emailService = emailService;
+        }
                                                                                                                             
         public async Task<OrderDto> CheckoutAsync(int userId, CheckoutDto dto)                                              
         {                                                                                                                   
@@ -47,9 +49,15 @@ namespace RayFluxMarket.Services
             // 3. Переносим товары из корзины в позиции заказа и списываем со склада                                        
             foreach (var cartItem in cartItems)                                                                             
             {                                                                                                               
-                if (cartItem.Product == null) continue;                                                                     
-                                                                                                                            
-                if (cartItem.Product.StockQuantity < cartItem.Quantity)                                                     
+                if (cartItem.Product == null) continue;
+
+                if (!cartItem.Product.IsActive)
+                {
+                    throw new InvalidOperationException(
+                        $"Нельзя оформить заказ: товар '{cartItem.Product.Name}' снят с продажи.");
+                }
+
+                if (cartItem.Product.StockQuantity < cartItem.Quantity)
                 {                                                                                                           
                     throw new InvalidOperationException(                                                                    
                         $"Нельзя оформить заказ: недостаточно товара '{cartItem.Product.Name}' на складе. " +               
@@ -58,34 +66,60 @@ namespace RayFluxMarket.Services
                                                                                                                             
                 cartItem.Product.StockQuantity -= cartItem.Quantity;                                                        
                                                                                                                             
-                var orderItem = new OrderItem                                                                               
-                {                                                                                                           
-                    ProductId = cartItem.ProductId,                                                                         
-                    Quantity = cartItem.Quantity,                                                                           
-                    Price = cartItem.Product.Price                                                                          
-                };                                                                                                          
+                var orderItem = new OrderItem
+                {
+                    ProductId = cartItem.ProductId,
+                    Product = cartItem.Product, // чтобы в письме было название товара
+                    Quantity = cartItem.Quantity,
+                    Price = cartItem.Product.Price
+                };
                                                                                                                             
                 order.OrderItems.Add(orderItem);                                                                            
                 order.TotalAmount += orderItem.Price * orderItem.Quantity;                                                  
             }                                                                                                               
                                                                                                                             
-            // 4. Сохраняем заказ и очищаем корзину                                                                         
-            _context.Orders.Add(order);                                                                                     
-            _context.CartItems.RemoveRange(cartItems);                                                                      
-            await _context.SaveChangesAsync();                                                                              
+            // 4. Сохраняем заказ и очищаем корзину в одной транзакции                                                                                        
+            await using var transaction = await _context.Database.BeginTransactionAsync();                                                                    
+            try                                                                                                                                               
+            {                                                                                                                                                 
+                _context.Orders.Add(order);                                                                                                                   
+                _context.CartItems.RemoveRange(cartItems);                                                                                                    
+                await _context.SaveChangesAsync();                                                                                                            
+                await transaction.CommitAsync();                                                                                                              
+            }                                                                                                                                                 
+            catch                                                                                                                                             
+            {                                                                                                                                                 
+                await transaction.RollbackAsync();                                                                                                            
+                throw;                                                                                                                                        
+            }                                                                                         
                                                                                                                             
-            // 5. Сбрасываем кэш (цены/остатки могли измениться)                                                            
-            if (_cache is MemoryCache memoryCache)                                                                          
-            {                                                                                                               
-                memoryCache.Compact(1.0);                                                                                   
-            }                                                                                                               
-                                                                                                                            
-            return MapToDto(order);                                                                                         
-        }                                                                                                                   
+            // 5. Сбрасываем кэш (цены/остатки могли измениться)
+            if (_cache is MemoryCache memoryCache)
+            {
+                memoryCache.Compact(1.0);
+            }
+
+            // 6. Отправляем письмо-подтверждение (не ломаем заказ, если почта недоступна)
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null && !string.IsNullOrEmpty(user.Email))
+            {
+                try
+                {
+                    await _emailService.SendOrderConfirmationAsync(order, user);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Ошибка при отправке подтверждения заказа #{order.Id}: {ex.Message}");
+                }
+            }
+
+            return MapToDto(order);
+        }
                                                                                                                             
         public async Task<IEnumerable<OrderDto>> GetMyOrdersAsync(int userId)                                               
         {                                                                                                                   
-            var orders = await _context.Orders                                                                              
+            var orders = await _context.Orders  
+                .AsNoTracking() 
                 .Include(o => o.OrderItems)                                                                                 
                     .ThenInclude(oi => oi.Product)                                                                          
                         .ThenInclude(p => p!.Images)                                                                        
@@ -98,7 +132,8 @@ namespace RayFluxMarket.Services
                                                                                                                             
         public async Task<OrderDto> GetOrderByIdAsync(int userId, int orderId, bool isAdmin)                                
         {                                                                                                                   
-            var query = _context.Orders                                                                                     
+            var query = _context.Orders 
+                .AsNoTracking() 
                 .Include(o => o.OrderItems)                                                                                 
                     .ThenInclude(oi => oi.Product)                                                                          
                         .ThenInclude(p => p!.Images)                                                                        
@@ -128,17 +163,47 @@ namespace RayFluxMarket.Services
                 throw new KeyNotFoundException($"Заказ с ID {orderId} не найден.");                                         
             }                                                                                                               
                                                                                                                             
-            order.Status = dto.Status;                                                                                      
-            await _context.SaveChangesAsync();                                                                              
-        }                                                                                                                   
+            if (!OrderStatus.CanTransition(order.Status, dto.Status))
+            {
+                throw new InvalidOperationException(
+                    $"Недопустимый переход статуса: '{order.Status}' → '{dto.Status}'.");
+            }
+
+            // Отмена заказа возвращает зарезервированный товар на склад
+            if (dto.Status == OrderStatus.Cancelled)
+            {
+                var orderItems = await _context.OrderItems
+                    .Where(oi => oi.OrderId == order.Id)
+                    .ToListAsync();
+
+                foreach (var item in orderItems)
+                {
+                    var product = await _context.Products.FindAsync(item.ProductId);
+                    if (product != null)
+                    {
+                        product.StockQuantity += item.Quantity;
+                    }
+                }
+            }
+
+            order.Status = dto.Status;
+            await _context.SaveChangesAsync();
+
+            // Остатки могли измениться — сбрасываем кэш товаров
+            if (_cache is MemoryCache memoryCache)
+            {
+                memoryCache.Compact(1.0);
+            }
+        }
                                                                                                                             
         public async Task<IEnumerable<OrderDto>> GetAllOrdersAsync(string? status)                                          
         {                                                                                                                   
-            var query = _context.Orders                                                                                     
-                .Include(o => o.OrderItems)                                                                                 
-                    .ThenInclude(oi => oi.Product)                                                                          
-                .AsNoTracking()                                                                                             
-                .AsQueryable();                                                                                             
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p!.Images)
+                .AsNoTracking()
+                .AsQueryable();
                                                                                                                             
             if (!string.IsNullOrWhiteSpace(status))                                                                         
             {                                                                                                               
@@ -165,7 +230,10 @@ namespace RayFluxMarket.Services
                 {                                                                                                           
                     ProductId = oi.ProductId,                                                                               
                     ProductName = oi.Product?.Name ?? "Товар удален из каталога",                                           
-                    ProductImageUrl = oi.Product?.Images.FirstOrDefault()?.Url,                                             
+                    ProductImageUrl = oi.Product?.Images
+                        .OrderByDescending(i => i.IsPrimary)
+                        .Select(i => i.Url)
+                        .FirstOrDefault(),
                     Quantity = oi.Quantity,                                                                                 
                     Price = oi.Price                                                                                        
                 }).ToList()                                                                                                 

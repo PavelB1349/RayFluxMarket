@@ -16,7 +16,8 @@
 
             // Вытаскиваем имя файла из пути (например, из "/images/products/1.jpg" достаем "1.jpg")
             var fileName = Path.GetFileName(relativePath);
-            var filePath = Path.Combine(_environment.WebRootPath, "images", "products", fileName);
+            var webRoot = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+            var filePath = Path.Combine(webRoot, "images", "products", fileName);
 
             // Если файл физически существует на диске — удаляем его
             if (File.Exists(filePath))
@@ -41,7 +42,8 @@
             var uniqueFileName = $"{Guid.NewGuid()}{extension}";// Guid.NewGuid() генерирует уникальный идентификатор, который мы используем в качестве имени файла, чтобы избежать конфликтов имен.
 
             // 4. Строим путь: wwwroot/images/products
-            var uploadsFolder = Path.Combine(_environment.WebRootPath, "images", "products");
+            var webRoot = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+            var uploadsFolder = Path.Combine(webRoot, "images", "products");
 
             // Если таких папок еще нет — создаем их на лету
             if (!Directory.Exists(uploadsFolder))

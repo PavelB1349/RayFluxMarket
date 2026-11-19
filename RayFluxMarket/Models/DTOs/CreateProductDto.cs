@@ -16,6 +16,10 @@ namespace RayFluxMarket.Models.DTOs
         public int CategoryId { get; set; }
         public int BrandId { get; set; }
 
+        // null — оставить текущее значение (при создании трактуется как true),
+        // true/false — явно включить или снять товар с продажи
+        public bool? IsActive { get; set; }
+
         public List<string> ImageUrls { get; set; } = new List<string>();
 
         public List<int> MaterialIds { get; set; } = new List<int>();
