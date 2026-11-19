@@ -12,12 +12,14 @@ namespace RayFluxMarket.Services
         private readonly AppDbContext _context;
         private readonly IMemoryCache _cache;
         private readonly IEmailService _emailService;
+        private readonly IPaymentService _paymentService;
 
-        public OrderService(AppDbContext context, IMemoryCache cache, IEmailService emailService)
+        public OrderService(AppDbContext context, IMemoryCache cache, IEmailService emailService, IPaymentService paymentService)
         {
             _context = context;
             _cache = cache;
             _emailService = emailService;
+            _paymentService = paymentService;
         }
                                                                                                                             
         public async Task<OrderDto> CheckoutAsync(int userId, CheckoutDto dto)                                              
@@ -183,6 +185,12 @@ namespace RayFluxMarket.Services
                     {
                         product.StockQuantity += item.Quantity;
                     }
+                }
+
+                // Если заказ уже был оплачен — возвращаем деньги через Stripe
+                if (order.Status == OrderStatus.Paid)
+                {
+                    await _paymentService.RefundOrderAsync(order.Id);
                 }
             }
 

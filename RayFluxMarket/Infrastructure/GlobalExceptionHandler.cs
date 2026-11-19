@@ -58,6 +58,12 @@ namespace RayFluxMarket.Infrastructure
                     problemDetails.Detail = stripeEx.Message;
                     break;
 
+                case DbUpdateConcurrencyException:
+                    problemDetails.Status = (int)HttpStatusCode.Conflict;
+                    problemDetails.Title = "Конфликт данных";
+                    problemDetails.Detail = "Данные были изменены другим запросом. Обновите страницу и попробуйте снова.";
+                    break;
+
                 case DbUpdateException:
                     problemDetails.Status = (int)HttpStatusCode.Conflict;
                     problemDetails.Title = "Конфликт данных";

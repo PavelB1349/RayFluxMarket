@@ -93,6 +93,18 @@ namespace RayFluxMarket.Services
         {
             var stripeEvent = EventUtility.ConstructEvent(json, stripeSignature, _stripeSettings.WebhookSecret);
 
+            // Брошенная сессия: пользователь не оплатил — отменяем заказ и возвращаем остатки
+            if (stripeEvent.Type == "checkout.session.expired")
+            {
+                if (stripeEvent.Data.Object is Session expiredSession &&
+                    expiredSession.Metadata.TryGetValue("OrderId", out string? expiredOrderIdStr) &&
+                    int.TryParse(expiredOrderIdStr, out int expiredOrderId))
+                {
+                    await CancelExpiredOrderAsync(expiredOrderId);
+                }
+                return;
+            }
+
             if (stripeEvent.Type != "checkout.session.completed")
             {
                 return;
@@ -119,13 +131,27 @@ namespace RayFluxMarket.Services
                     .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
-            // Cancelled — терминальный статус: не «воскрешаем» отменённый заказ оплатой
-            if (order == null || order.Status == OrderStatus.Paid || order.Status == OrderStatus.Cancelled)
+            if (order == null)
             {
                 return;
             }
 
+            // Идемпотентность: повторная доставка вебхука не должна ничего менять
+            if (order.Status == OrderStatus.Paid)
+            {
+                return;
+            }
+
+            // Cancelled — терминальный статус: заказ не «воскрешаем».
+            // Но если деньги всё же списаны, их нужно вернуть покупателю.
+            if (order.Status == OrderStatus.Cancelled)
+            {
+                await RefundCancelledOrderAsync(order, session);
+                return;
+            }
+
             order.Status = OrderStatus.Paid;
+            order.StripePaymentIntentId = session.PaymentIntentId;
             await _context.SaveChangesAsync();
 
             Console.WriteLine($"✅ Заказ #{orderId} успешно оплачен!");
@@ -148,6 +174,90 @@ namespace RayFluxMarket.Services
             }    
         }
 
-        
+        public async Task RefundOrderAsync(int orderId)
+        {
+            var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+            if (order == null)
+            {
+                throw new KeyNotFoundException($"Заказ с ID {orderId} не найден.");
+            }
+
+            if (string.IsNullOrEmpty(order.StripePaymentIntentId))
+            {
+                // Заказ оплачен вне Stripe (например, вручную) — возврат не требуется
+                return;
+            }
+
+            var refundService = new RefundService();
+            try
+            {
+                var refund = await refundService.CreateAsync(
+                    new RefundCreateOptions
+                    {
+                        PaymentIntent = order.StripePaymentIntentId,
+                        Reason = "requested_by_customer",
+                        Metadata = new Dictionary<string, string> { { "OrderId", order.Id.ToString() } }
+                    },
+                    // Идемпотентность: повторный вызов не создаст второй возврат
+                    new RequestOptions { IdempotencyKey = $"refund-order-{order.Id}" });
+
+                Console.WriteLine(
+                    $"↩️ По заказу #{order.Id} оформлен возврат {refund.Amount / 100m:N2} {refund.Currency} (refund {refund.Id}).");
+            }
+            catch (StripeException ex)
+            {
+                Console.WriteLine($"⚠️ Не удалось оформить возврат по заказу #{order.Id}: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Оформляет возврат средств по отменённому заказу, если оплата всё же прошла.
+        /// </summary>
+        private async Task RefundCancelledOrderAsync(Order order, Session session)
+        {
+            if (string.IsNullOrEmpty(session.PaymentIntentId))
+            {
+                Console.WriteLine(
+                    $"⚠️ Заказ #{order.Id} отменён, но в сессии Stripe нет PaymentIntentId — автоматический возврат невозможен.");
+                return;
+            }
+
+            // Сохраняем PaymentIntentId, чтобы RefundOrderAsync мог выполнить возврат
+            order.StripePaymentIntentId = session.PaymentIntentId;
+            await _context.SaveChangesAsync();
+
+            await RefundOrderAsync(order.Id);
+        }
+
+        /// <summary>
+        /// Отменяет заказ, по которому истекла Stripe-сессия, и возвращает остатки на склад.
+        /// </summary>
+        private async Task CancelExpiredOrderAsync(int orderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            // Отменяем только «висящие» новые заказы — оплаченные/отменённые не трогаем
+            if (order == null || order.Status != OrderStatus.New)
+            {
+                return;
+            }
+
+            foreach (var item in order.OrderItems)
+            {
+                var product = await _context.Products.FindAsync(item.ProductId);
+                if (product != null)
+                {
+                    product.StockQuantity += item.Quantity;
+                }
+            }
+
+            order.Status = OrderStatus.Cancelled;
+            await _context.SaveChangesAsync();
+
+            Console.WriteLine($"⏱️ Заказ #{orderId} отменён: истекла сессия оплаты Stripe.");
+        }
     }
 }

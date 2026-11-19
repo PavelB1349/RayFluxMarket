@@ -166,6 +166,9 @@ namespace RayFluxMarket.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("StripePaymentIntentId")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

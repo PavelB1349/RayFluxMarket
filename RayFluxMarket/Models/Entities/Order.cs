@@ -28,6 +28,9 @@ namespace RayFluxMarket.Models.Entities
         // Навигационное свойство: список позиций в этом заказе
         public List<OrderItem> OrderItems { get; set; } = new();
 
+        // ID платёжного интента Stripe — нужен для идемпотентности вебхука и возвратов
+        public string? StripePaymentIntentId { get; set; }
+
         // Оптимистичная блокировка: защита от двойной оплаты/смены статуса
         [Timestamp]
         public byte[]? RowVersion { get; set; }

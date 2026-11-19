@@ -17,6 +17,7 @@ namespace RayFluxMarket.Services
         public async Task<CartDto> GetCartAsync(int userId)                                                                 
         {                                                                                                                   
             var cartItems = await _context.CartItems
+                .AsNoTracking()
                 .Include(ci => ci.Product)
                     .ThenInclude(p => p!.Images)
                 // Не скрываем снятые с продажи товары: иначе пользователь не сможет
@@ -31,9 +32,11 @@ namespace RayFluxMarket.Services
                     ProductId = ci.ProductId,                                                                               
                     ProductName = ci.Product?.Name ?? "Товар удален",                                                       
                     Price = ci.Product?.Price ?? 0,                                                                         
-                    MainImageUrl = ci.Product?.Images != null && ci.Product.Images.Any()                                    
-                        ? ci.Product.Images.FirstOrDefault()?.Url                                                           
-                        : null,                                                                                             
+                    // Главное фото выбираем по признаку IsPrimary — так же, как в каталоге и в заказах
+                    MainImageUrl = ci.Product?.Images?
+                        .OrderByDescending(i => i.IsPrimary)
+                        .Select(i => i.Url)
+                        .FirstOrDefault(),
                     Quantity = ci.Quantity                                                                                  
                 }).ToList()                                                                                                 
             };                                                                                                              

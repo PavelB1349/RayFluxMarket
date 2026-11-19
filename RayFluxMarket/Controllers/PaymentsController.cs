@@ -44,6 +44,7 @@ namespace RayFluxMarket.Controllers
 
         // POST: api/Payments/webhook
         [HttpPost("webhook")]
+        [AllowAnonymous] // Stripe не передаёт JWT — вебхук должен быть доступен без авторизации
         public async Task<IActionResult> StripeWebhook()
         {
             var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();

@@ -7,5 +7,8 @@
 
         // Обрабатывает webhook от Stripe (проверка подписи, обновление статуса, отправка чека)
         Task HandleWebhookAsync(string json, string stripeSignature);
+
+        // Оформляет возврат средств по оплаченному заказу (идемпотентно)
+        Task RefundOrderAsync(int orderId);
     }
 }
